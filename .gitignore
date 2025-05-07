@@ -1,0 +1,27 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+.venv/
+env/
+venv/
+
+# Logs
+logs/
+*.log
+
+# Gmail OAuth tokens
+token.json
+credentials.json
+
+# Tool-generated results
+Tools/results/
+
+# Heartbeat files
+heartbeat/
+
+# OS junk
+.DS_Store
+Thumbs.db
