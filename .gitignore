@@ -26,3 +26,6 @@ heartbeat/
 # OS junk
 .DS_Store
 Thumbs.db
+
+# Agentic process files
+Tools/downloads/

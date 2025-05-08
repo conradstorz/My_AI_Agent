@@ -36,7 +36,7 @@ def run_gmail_downloader():
     return None
 
 def agent_loop():
-    logger.add("agent.log", rotation="1 week")
+    # logger.add("agent.log", rotation="1 week")
     logger.info("Agent starting up...")
 
     while True:
