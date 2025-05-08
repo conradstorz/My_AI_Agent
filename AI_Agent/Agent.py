@@ -1,12 +1,13 @@
 import subprocess
 import json
 import time
+import sys
 from pathlib import Path
 from loguru import logger
 
-TOOLS_DIR = Path(__file__).parent / "Tools"
-RESULTS_DIR = TOOLS_DIR / "results"
-GMAIL_DOWNLOADER_SCRIPT = TOOLS_DIR / "GmailDownloader.py"
+TOOLS_DIR = Path(__file__).parent.parent / "Tools"
+RESULTS_DIR = TOOLS_DIR / "Results"
+GMAIL_DOWNLOADER_SCRIPT = TOOLS_DIR / "Gmail_Downloader.py"
 GMAIL_RESULT = RESULTS_DIR / "gmail_downloader.json"
 
 # Set how often the agent loops (in seconds)
@@ -16,7 +17,7 @@ def run_gmail_downloader():
     logger.info("Invoking Gmail Downloader...")
     try:
         result = subprocess.run(
-            ["python", str(GMAIL_DOWNLOADER_SCRIPT)],
+            [sys.executable, str(GMAIL_DOWNLOADER_SCRIPT)],
             check=True,
             capture_output=True,
             text=True

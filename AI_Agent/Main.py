@@ -3,7 +3,9 @@ import time
 import json
 from pathlib import Path
 from loguru import logger
-from agent import agent_loop
+from Agent import agent_loop
+from dotenv import load_dotenv
+load_dotenv()
 
 # Where to store agent heartbeat info
 HEARTBEAT_FILE = Path("heartbeat/agent.status.json")
@@ -23,7 +25,9 @@ def heartbeat():
         time.sleep(HEARTBEAT_INTERVAL)
 
 def main():
-    logger.add("main.log", rotation="1 week")
+    LOGS_DIR = Path("LOGS")
+    LOGS_DIR.mkdir(exist_ok=True)
+    logger.add(LOGS_DIR / "main.log", rotation="1 week")
     logger.info("Launching main agent process.")
 
     # Start heartbeat in a separate thread
