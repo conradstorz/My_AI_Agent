@@ -1,49 +1,50 @@
 import subprocess
+import sys
 import json
 import time
-import sys
 from pathlib import Path
 from loguru import logger
 
-TOOLS_DIR = Path(__file__).parent.parent / "Tools"
+# --- Configuration ---
+BASE_DIR = Path(__file__).resolve().parent.parent
+TOOLS_DIR = BASE_DIR / "Tools"
 RESULTS_DIR = TOOLS_DIR / "Results"
+LOGS_DIR = BASE_DIR / "logs"
+
 GMAIL_DOWNLOADER_SCRIPT = TOOLS_DIR / "Gmail_Downloader.py"
+FILE_ANALYZER_SCRIPT = TOOLS_DIR / "FileAnalyzer.py"
 GMAIL_RESULT = RESULTS_DIR / "gmail_downloader.json"
 
-# Set how often the agent loops (in seconds)
-LOOP_DELAY = 300  # 5 minutes
+LOOP_DELAY = 300  # seconds (5 minutes)
 
-def run_gmail_downloader():
-    logger.info("Invoking Gmail Downloader...")
+def run_tool(script_path: Path, label: str) -> bool:
+    logger.info(f"Invoking {label}...")
     try:
         result = subprocess.run(
-            [sys.executable, str(GMAIL_DOWNLOADER_SCRIPT)],
+            [sys.executable, str(script_path)],
             check=True,
             capture_output=True,
             text=True
         )
-        logger.debug(f"Gmail Downloader stdout: {result.stdout}")
+        logger.debug(f"{label} stdout:\n{result.stdout}")
+        return True
     except subprocess.CalledProcessError as e:
-        logger.error(f"Gmail Downloader failed: {e.stderr}")
-        return None
-
-    if GMAIL_RESULT.exists():
-        try:
-            with GMAIL_RESULT.open("r") as f:
-                return json.load(f)
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to decode result JSON: {e}")
-    return None
+        logger.error(f"{label} failed:\n{e.stderr}")
+        return False
 
 def agent_loop():
-    # logger.add("agent.log", rotation="1 week")
-    logger.info("Agent starting up...")
+    LOGS_DIR.mkdir(exist_ok=True)
+    logger.add(LOGS_DIR / "agent.log", rotation="1 week")
+    logger.info("Agent loop starting...")
 
     while True:
-        result = run_gmail_downloader()
-        if result:
-            logger.info(f"Gmail Downloader result: {json.dumps(result, indent=2)}")
-            # Add more agent decision logic here if needed
+        logger.info("=== New agent cycle ===")
+
+        # Step 1: Download Gmail attachments
+        success = run_tool(GMAIL_DOWNLOADER_SCRIPT, "Gmail Downloader")
+
+        # Step 2: Analyze downloaded files regardless of success
+        run_tool(FILE_ANALYZER_SCRIPT, "File Analyzer")
 
         logger.info(f"Sleeping for {LOOP_DELAY} seconds...")
         time.sleep(LOOP_DELAY)
