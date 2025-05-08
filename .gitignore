@@ -21,7 +21,23 @@ credentials.json
 AI_Agent/tools/results/
 AI_Agent/tools/analysis/
 AI_Agent/tools/downloads/   
-
+AI_Agent\tools\downloaded_attachments.json
+AI_Agent/tools/analysis/analysis.json
+AI_Agent/tools/analysis/analysis_*.json
+AI_Agent/tools/analysis/analysis_*.csv
+AI_Agent/tools/analysis/analysis_*.txt
+AI_Agent/tools/analysis/analysis_*.html
+AI_Agent/tools/analysis/analysis_*.md
+AI_Agent/tools/analysis/analysis_*.xlsx
+AI_Agent/tools/analysis/analysis_*.jsonl
+AI_Agent/tools/analysis/analysis_*.yaml
+AI_Agent/tools/analysis/analysis_*.yml
+AI_Agent/tools/analysis/analysis_*.xml
+AI_Agent/tools/analysis/analysis_*.pdf
+AI_Agent/tools/analysis/analysis_*.docx
+AI_Agent/tools/analysis/analysis_*.pptx
+AI_Agent/tools/analysis/analysis_*.csv
+AI_Agent/tools/analysis/analysis_*.txt
 # Heartbeat files
 heartbeat/
 
