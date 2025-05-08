@@ -6,13 +6,13 @@ from pathlib import Path
 from loguru import logger
 
 # --- Configuration ---
-BASE_DIR = Path(__file__).resolve().parent.parent
-TOOLS_DIR = BASE_DIR / "Tools"
-RESULTS_DIR = TOOLS_DIR / "Results"
+BASE_DIR = Path(__file__).resolve().parent
+TOOLS_DIR = BASE_DIR / "tools"
+RESULTS_DIR = TOOLS_DIR / "results"
 LOGS_DIR = BASE_DIR / "logs"
 
-GMAIL_DOWNLOADER_SCRIPT = TOOLS_DIR / "Gmail_Downloader.py"
-FILE_ANALYZER_SCRIPT = TOOLS_DIR / "FileAnalyzer.py"
+GMAIL_DOWNLOADER_SCRIPT = TOOLS_DIR / "gmail_downloader.py"
+FILE_ANALYZER_SCRIPT = TOOLS_DIR / "file_analyzer.py"
 GMAIL_RESULT = RESULTS_DIR / "gmail_downloader.json"
 
 LOOP_DELAY = 300  # seconds (5 minutes)

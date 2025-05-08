@@ -2,18 +2,20 @@ from pathlib import Path
 from loguru import logger
 import importlib
 import os
-import sys
+import json
+from dotenv import load_dotenv  
+import time
 
 REQUIRED_MODULES = [
     "utils.openai_tools",
-    "Tools.GmailDownloader",
-    "Tools.FileAnalyzer"
+    "tools.gmail_downloader",
+    "tools.file_analyzer"
 ]
 
 REQUIRED_DIRS = [
-    Path("Tools/downloads"),
-    Path("Tools/analysis"),
-    Path("Tools/results"),
+    Path("tools/downloads"),
+    Path("tools/analysis"),
+    Path("tools/results"),
     Path("logs"),
 ]
 
@@ -44,9 +46,26 @@ def check_environment_vars():
         else:
             logger.debug(f"🔑 Env var set: {var}")
 
+def write_summary(status: str, summary: str):
+    heartbeat_dir = Path("heartbeat")
+    heartbeat_dir.mkdir(exist_ok=True)
+    summary_file = heartbeat_dir / "diagnostic.status.json"
+    with summary_file.open("w") as f:
+        json.dump({
+            "timestamp": time.time(),
+            "status": status,
+            "summary": summary
+        }, f, indent=2)
+
 def run_startup_diagnostics():
     logger.info("Running startup diagnostics...")
-    check_modules()
-    check_directories()
-    check_environment_vars()
-    logger.info("Startup check complete.")
+
+    try:
+        check_modules()
+        check_directories()
+        check_environment_vars()
+        logger.info("✅ Startup check complete.")
+        write_summary("ok", "All startup checks passed.")
+    except SystemExit as e:
+        write_summary("error", "Startup check failed. See logs for details.")
+        raise  # Re-raise to halt execution

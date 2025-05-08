@@ -1,14 +1,15 @@
-import fitz  # PyMuPDF
+import fitz  # actually part of PyMuPDF not a package called 'fitz
 import os
 import json
 import time
 from pathlib import Path
 from loguru import logger
 import pandas as pd
-from Utils.openAI_tools import summarize_document
+from utils.openai_tools import summarize_document
 
 
 BASE_DIR = Path(__file__).resolve().parent
+TOOLS_DIR = BASE_DIR / "tools"
 DOWNLOADS_DIR = BASE_DIR / "downloads"
 ANALYSIS_DIR = BASE_DIR / "analysis"
 RESULT_LOG = BASE_DIR / "logs" / "file_analyzer.log"

@@ -7,7 +7,7 @@ from Agent import agent_loop
 from dotenv import load_dotenv
 load_dotenv()
 
-from Utils.startup_checks import run_startup_diagnostics
+from utils.startup_checks import run_startup_diagnostics
 
 
 # Where to store agent heartbeat info
