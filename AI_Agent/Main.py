@@ -3,7 +3,7 @@ import time
 import json
 from pathlib import Path
 from loguru import logger
-from Agent import agent_loop
+from agent import agent_loop
 from dotenv import load_dotenv
 load_dotenv()
 
