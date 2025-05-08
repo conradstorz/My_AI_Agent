@@ -29,3 +29,4 @@ Thumbs.db
 
 # Agentic process files
 Tools/downloads/
+Tools/downloaded_attachments.json
