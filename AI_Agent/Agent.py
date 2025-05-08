@@ -21,7 +21,7 @@ def run_tool(script_path: Path, label: str) -> bool:
     logger.info(f"Invoking {label}...")
     try:
         result = subprocess.run(
-            [sys.executable, str(script_path)],
+            [sys.executable, "-m", str(script_path)],
             check=True,
             capture_output=True,
             text=True
