@@ -1,3 +1,4 @@
+```python
 from pathlib import Path
 import json
 import time
@@ -17,10 +18,8 @@ UNHANDLED_FILEDATA = BASE_DIR / "unhandled_filedata.json"
 LOGS_DIR = BASE_DIR / "logs"
 
 # Ensure necessary directories exist
-LOGS_DIR.mkdir(exist_ok=True)
-ANALYSIS_DIR.mkdir(parents=True, exist_ok=True)
-DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
-RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+for d in (LOGS_DIR, ANALYSIS_DIR, DOWNLOADS_DIR, RESULTS_DIR):
+    d.mkdir(parents=True, exist_ok=True)
 
 # Configure logging
 logger.add(LOGS_DIR / "file_analyzer.log", rotation="1 week")
@@ -50,7 +49,7 @@ def save_unhandled(unhandled: list):
     with UNHANDLED_FILEDATA.open("w", encoding="utf-8") as f:
         json.dump(unhandled, f, indent=2)
 
-def update_unhandled(unhandled: list, file, suffix: str, subject: str, sender: str) -> list:
+def record_unhandled(unhandled: list, file: Path, suffix: str, subject: str, sender: str) -> list:
     entry = {
         "filename": file.name,
         "filetype": suffix,
@@ -62,15 +61,6 @@ def update_unhandled(unhandled: list, file, suffix: str, subject: str, sender: s
         unhandled.append(entry)
         logger.info(f"Recorded unhandled file type: {file.name}")
     return unhandled
-
-# --- Memory entry update ---
-def update_memory(memory: dict, key: str, entry: dict) -> dict:
-    if key not in memory:
-        memory[key] = entry
-        logger.info(f"Categorization memory updated with key: {key}")
-    else:
-        logger.debug(f"Memory key already exists: {key}")
-    return memory
 
 # --- Helpers ---
 def extract_text_from_pdf(file: Path) -> str:
@@ -99,13 +89,12 @@ def has_been_analyzed(stem: str) -> bool:
 
 
 def load_downloaded_file_metadata() -> dict:
-    gd = RESULTS_DIR / "gmail_downloader.json"
-    if not gd.exists():
+    path = RESULTS_DIR / "gmail_downloader.json"
+    if not path.exists():
         logger.warning("No gmail_downloader.json found.")
         return {}
     try:
-        with gd.open("r") as f:
-            data = json.load(f)
+        data = json.loads(path.read_text(encoding="utf-8"))
         return {item["filename"]: {"subject": item.get("subject"), "sender": item.get("sender")}
                 for item in data.get("downloads", [])}
     except Exception as e:
@@ -114,13 +103,12 @@ def load_downloaded_file_metadata() -> dict:
 
 
 def load_fetched_messages() -> list:
-    gq = RESULTS_DIR / "gmail_query_fetcher.json"
-    if not gq.exists():
+    path = RESULTS_DIR / "gmail_query_fetcher.json"
+    if not path.exists():
         logger.warning("No gmail_query_fetcher.json found.")
         return []
     try:
-        with gq.open("r", encoding="utf-8") as f:
-            data = json.load(f)
+        data = json.loads(path.read_text(encoding="utf-8"))
         return data.get("messages_saved", [])
     except Exception as e:
         logger.error(f"Failed to load gmail_query_fetcher.json: {e}")
@@ -134,34 +122,37 @@ def analyze_file(file: Path, context: dict, memory: dict, unhandled: list):
     subject = meta.get("subject", "(unknown)")
     sender = meta.get("sender", "(unknown)")
 
-    # Content extraction
+    # Extract or read content
     if suffix == ".pdf":
         content = extract_text_from_pdf(file)
     elif suffix == ".txt":
         content = file.read_text(encoding="utf-8", errors="ignore")
     elif suffix in {".xls", ".xlsx"}:
         content = extract_text_from_excel(file)
-    elif suffix in {".html", ".ics", ".csv", ".log"}:
+    elif suffix in {".html", ".csv", ".log"}:
         content = file.read_text(encoding="utf-8", errors="ignore")
     elif suffix in {".jpg", ".jpeg", ".png", ".gif", ".zip", ".rar"}:
         content = f"[Binary file type: {suffix}. No text content extracted.]"
         logger.info(f"Binary file: {file.name} — skipping summarization.")
     else:
+        # Unknown file type => record for user guidance
         content = f"[Unknown or unsupported file type: {suffix}]"
-        logger.warning(f"Unknown file type: {file.name} — recorded for later review.")
-        unhandled = update_unhandled(unhandled, file, suffix, subject, sender)
+        logger.warning(f"Unknown file type: {file.name}. Recording for review.")
+        unhandled = record_unhandled(unhandled, file, suffix, subject, sender)
 
-    # Summarize if text-based or placeholder
-    if "No text content" not in content and "Unknown or unsupported" not in content:
-        result = summarize_document(content, file.name)
+    # Summarize if content or placeholder is extractable
+    if not content.startswith("[") or content.startswith("[Unknown"):
+        # For extractable or unknown, attempt summarization
+        try:
+            result = summarize_document(content, file.name)
+        except Exception as e:
+            logger.error(f"Summarization failed for {file.name}: {e}")
+            result = {"summary": content, "contains_structured_data": False, "notes": ""}
     else:
-        result = {
-            "summary": content,
-            "contains_structured_data": False,
-            "notes": "Skipped AI summarization.",
-            "success": True
-        }
+        # Binary or unknown use placeholder result
+        result = {"summary": content, "contains_structured_data": False, "notes": "Skipped AI summarization."}
 
+    # Enrich result and save
     result.update({
         "filename": file.name,
         "timestamp": time.time(),
@@ -169,44 +160,20 @@ def analyze_file(file: Path, context: dict, memory: dict, unhandled: list):
         "subject": subject,
         "sender": sender
     })
-
-    # Save analysis output
     out_file = ANALYSIS_DIR / f"{file.stem}.analysis.json"
-    with out_file.open("w", encoding="utf-8") as f:
-        json.dump(result, f, indent=2)
+    out_file.write_text(json.dumps(result, indent=2), encoding="utf-8")
     logger.info(f"Saved analysis to {out_file.name}")
 
-    # Categorization memory update
-    if suffix in {".jpg", ".jpeg", ".png", ".gif", ".zip", ".rar"}:
-        key = f"SENDER::{sender}::{suffix}"
-        entry = {
-            "source": sender,
-            "filetype": suffix,
-            "summary": f"[Binary file type: {suffix}. Multiple files from this sender.]",
-            "contains_structured_data": False,
-            "category": "(uncategorized)",
-            "notes": ""
-        }
-    elif "Unknown or unsupported" in content:
-        key = f"UNHANDLED::{file.name}"
-        entry = {
-            "source": sender,
-            "filetype": suffix,
-            "summary": content,
-            "contains_structured_data": False,
-            "category": "(awaiting user guidance)",
-            "notes": ""
-        }
-    else:
-        key = f"FILE::{file.name}"
-        entry = {
-            "source": sender,
-            "subject": subject,
-            "summary": result.get("summary"),
-            "contains_structured_data": result.get("contains_structured_data"),
-            "category": "(uncategorized)",
-            "notes": ""
-        }
+    # Categorization memory: one entry per sender per file type
+    key = f"SENDER::{sender}::{suffix}"
+    entry = {
+        "source": sender,
+        "filetype": suffix,
+        "summary": result.get("summary"),
+        "contains_structured_data": result.get("contains_structured_data"),
+        "category": "(uncategorized)",
+        "notes": ""
+    }
     memory = update_memory(memory, key, entry)
     return memory, unhandled
 
@@ -222,7 +189,11 @@ def analyze_message_body(message: dict, memory: dict, unhandled: list):
     body = message.get("body", "")
 
     logger.info(f"Analyzing message ID: {msg_id}")
-    result = summarize_document(body, f"{msg_id}.txt")
+    try:
+        result = summarize_document(body, f"{msg_id}.txt")
+    except Exception as e:
+        logger.error(f"Summarization failed for message {msg_id}: {e}")
+        result = {"summary": body, "contains_structured_data": False, "notes": ""}
     result.update({
         "message_id": msg_id,
         "timestamp": time.time(),
@@ -232,11 +203,11 @@ def analyze_message_body(message: dict, memory: dict, unhandled: list):
     })
 
     out_file = ANALYSIS_DIR / f"{msg_id}.analysis.json"
-    with out_file.open("w", encoding="utf-8") as f:
-        json.dump(result, f, indent=2)
+    out_file.write_text(json.dumps(result, indent=2), encoding="utf-8")
     logger.info(f"Saved analysis to {out_file.name}")
 
-    key = f"MSG::{msg_id}"
+    # Memory for messages grouped by sender
+    key = f"MSG::{sender}"
     entry = {
         "source": sender,
         "subject": subject,
@@ -248,19 +219,18 @@ def analyze_message_body(message: dict, memory: dict, unhandled: list):
     memory = update_memory(memory, key, entry)
     return memory, unhandled
 
-# --- Entry point ---
+
 def main():
     logger.info("File Analyzer starting...")
-
     memory = load_memory()
     unhandled = load_unhandled()
-    attachment_context = load_downloaded_file_metadata()
+    context = load_downloaded_file_metadata()
 
     for file in DOWNLOADS_DIR.glob("*.*"):
         if has_been_analyzed(file.stem):
             logger.debug(f"Already analyzed: {file.name}")
             continue
-        memory, unhandled = analyze_file(file, attachment_context, memory, unhandled)
+        memory, unhandled = analyze_file(file, context, memory, unhandled)
 
     for message in load_fetched_messages():
         memory, unhandled = analyze_message_body(message, memory, unhandled)
@@ -271,3 +241,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+```
