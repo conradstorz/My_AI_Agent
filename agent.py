@@ -32,8 +32,8 @@ def agent_loop():
     while True:
         logger.info("=== New agent cycle ===")
 
-        run_tool("my_ai_agent.tools.gmail_downloader", "Gmail Downloader")
-        run_tool("my_ai_agent.tools.file_analyzer", "File Analyzer")
+        run_tool("tools.gmail_downloader", "Gmail Downloader")
+        run_tool("tools.file_analyzer", "File Analyzer")
 
         logger.info(f"Sleeping for {LOOP_DELAY} seconds...")
         time.sleep(LOOP_DELAY)
