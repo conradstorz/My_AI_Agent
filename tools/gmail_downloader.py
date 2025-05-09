@@ -1,3 +1,22 @@
+"""
+Gmail Downloader Module
+
+This module handles authentication with the Gmail API, checks for new unread messages with attachments,
+downloads attachments to a local directory, and records processing history and results.
+
+Usage:
+    python gmail_downloader.py
+
+Requirements:
+    - A `.env` file or environment variable `GMAIL_CREDENTIALS_PATH` pointing to the Gmail API credentials.
+    - Google OAuth2 client libraries installed (`google-auth`, `google-auth-oauthlib`, `google-api-python-client`).
+
+Files:
+    - `token.json`: Stores OAuth2 tokens after the initial authentication flow.
+    - `downloaded_attachments.json`: Tracks processed message IDs and attachment hashes.
+    - `gmail_downloader.json`: Appends download results for each run.
+
+"""
 from pathlib import Path
 from loguru import logger
 import base64
@@ -11,7 +30,7 @@ from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
-# Load environment variables
+# Load environment variables (override existing values)
 load_dotenv(override=True)
 
 # --- Configuration ---
@@ -23,23 +42,44 @@ RESULTS_FILE = RESULTS_DIR / "gmail_downloader.json"
 TOKEN_FILE = BASE_DIR / "token.json"
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 
+
 def get_credentials_file():
+    """
+    Retrieve the Gmail API credentials file from the environment.
+
+    :return: Path to the Gmail credentials JSON file.
+    :rtype: pathlib.Path
+    :raises FileNotFoundError: If the environment variable is missing or the file does not exist.
+    """
     credentials_path = os.environ.get("GMAIL_CREDENTIALS_PATH")
     logger.debug(f"GMAIL_CREDENTIALS_PATH={credentials_path}")
     if not credentials_path:
         logger.error("Environment variable GMAIL_CREDENTIALS_PATH not set.")
         raise FileNotFoundError("Missing environment variable: GMAIL_CREDENTIALS_PATH")
+
     credentials_file = Path(credentials_path)
     if not credentials_file.exists():
         logger.error(f"Credentials file does not exist at: {credentials_file}")
         raise FileNotFoundError(f"Gmail credentials file not found: {credentials_file}")
+
     logger.info(f"Using credentials file: {credentials_file}")
     return credentials_file
 
+
 def authenticate():
+    """
+    Authenticate with the Gmail API using OAuth2 credentials.
+
+    This will attempt to load existing tokens from `TOKEN_FILE`, refresh them if expired,
+    or initiate a new OAuth2 flow if necessary.
+
+    :return: Authenticated Gmail API service instance.
+    :rtype: googleapiclient.discovery.Resource
+    """
     credentials_file = get_credentials_file()
     creds = None
 
+    # Load existing token if present
     if TOKEN_FILE.exists():
         logger.debug(f"Found token file: {TOKEN_FILE}")
         with open(TOKEN_FILE, "rb") as token:
@@ -47,6 +87,7 @@ def authenticate():
     else:
         logger.debug("No token file found. Will initiate OAuth2 flow.")
 
+    # Refresh or request new credentials
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             logger.info("Refreshing expired credentials...")
@@ -62,23 +103,57 @@ def authenticate():
     logger.info("Gmail API client authenticated.")
     return build("gmail", "v1", credentials=creds)
 
+
 def load_history():
+    """
+    Load the processing history of messages and attachments.
+
+    :return: A dictionary containing sets of processed message IDs and attachment hashes.
+    :rtype: dict
+    """
     if HISTORY_FILE.exists():
         with HISTORY_FILE.open("r") as f:
             return json.load(f)
     return {"message_ids": set(), "attachments": set()}
 
+
 def save_history(history):
+    """
+    Save the processing history of messages and attachments.
+
+    :param history: Dictionary with keys `message_ids` and `attachments` containing sets of processed items.
+    :type history: dict
+    """
     with HISTORY_FILE.open("w") as f:
         json.dump({
             "message_ids": list(history["message_ids"]),
             "attachments": list(history["attachments"])
         }, f, indent=2)
 
+
 def hash_bytes(data):
+    """
+    Compute the SHA-256 hash of the given binary data.
+
+    :param data: Binary data to hash.
+    :type data: bytes
+    :return: Hexadecimal digest of the SHA-256 hash.
+    :rtype: str
+    """
     return hashlib.sha256(data).hexdigest()
 
+
 def download_attachments(service, history):
+    """
+    Download unread Gmail attachments and update history.
+
+    :param service: Authenticated Gmail API service instance.
+    :type service: googleapiclient.discovery.Resource
+    :param history: Dictionary tracking processed message IDs and attachment hashes.
+    :type history: dict
+    :return: List of dictionaries with metadata for each downloaded attachment.
+    :rtype: list
+    """
     logger.info("Checking Gmail for new unread messages with attachments...")
     query = "has:attachment is:unread"
     response = service.users().messages().list(userId="me", q=query).execute()
@@ -101,9 +176,7 @@ def download_attachments(service, history):
         logger.info(f"  Subject: {subject}")
         logger.info(f"  From:    {sender}")
 
-        payload = message.get("payload", {})
-        parts = payload.get("parts", [])
-
+        parts = message.get("payload", {}).get("parts", [])
         for part in parts:
             if part.get("filename") and "attachmentId" in part.get("body", {}):
                 attachment_id = part["body"]["attachmentId"]
@@ -121,16 +194,19 @@ def download_attachments(service, history):
                     logger.debug(f"  Duplicate attachment detected (hash match), skipping: {filename}")
                     continue
 
-                path = DOWNLOAD_DIR / filename
+                # Save the attachment using a hashed filename to prevent collisions
+                filename_hashed = f"{file_hash}_{filename}"
+                path = DOWNLOAD_DIR / filename_hashed
                 path.parent.mkdir(parents=True, exist_ok=True)
                 with open(path, "wb") as f:
                     f.write(data)
 
                 logger.info(f"  Downloaded: {filename}")
                 new_files.append({
-                    "filename": filename,
+                    "filename": filename_hashed,
                     "subject": subject,
-                    "sender": sender
+                    "sender": sender,
+                    "attachment name": filename,
                 })
                 history["attachments"].add(hash_key)
 
@@ -139,7 +215,14 @@ def download_attachments(service, history):
     logger.info(f"Total new files downloaded: {len(new_files)}")
     return new_files
 
+
 def write_result(downloaded_info):
+    """
+    Write the download results to a JSON file for record keeping.
+
+    :param downloaded_info: List of metadata dicts for each downloaded attachment.
+    :type downloaded_info: list
+    """
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     result = {
         "tool": "GmailDownloader",
@@ -147,15 +230,24 @@ def write_result(downloaded_info):
         "downloads": downloaded_info,
         "timestamp": time.time()
     }
-    with RESULTS_FILE.open("w") as f:
+    with RESULTS_FILE.open("a") as f:
         json.dump(result, f, indent=2)
     logger.info(f"Result JSON written to: {RESULTS_FILE}")
 
+
 def main():
+    """
+    Entry point for the Gmail attachment downloader script.
+
+    This will configure logging, authenticate with Gmail,
+    download new attachments, record the results, and update history.
+    """
+    # Configure logging directory and rotation
     LOGS_DIR = BASE_DIR / "logs"
     LOGS_DIR.mkdir(exist_ok=True)
     logger.add(LOGS_DIR / "gmail_downloader.log", rotation="1 week")
 
+    # Ensure download directory exists
     DOWNLOAD_DIR.mkdir(exist_ok=True)
 
     try:
@@ -165,6 +257,7 @@ def main():
         return
 
     history = load_history()
+    # Convert lists back to sets for processing
     history["message_ids"] = set(history.get("message_ids", []))
     history["attachments"] = set(history.get("attachments", []))
 
@@ -173,6 +266,7 @@ def main():
         write_result(downloaded_info)
     finally:
         save_history(history)
+
 
 if __name__ == "__main__":
     main()
