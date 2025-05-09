@@ -1,4 +1,4 @@
-```python
+
 from pathlib import Path
 import json
 import time
@@ -37,6 +37,17 @@ def load_memory() -> dict:
 def save_memory(memory: dict):
     with MEMORY_FILE.open("w", encoding="utf-8") as f:
         json.dump(memory, f, indent=2)
+
+def update_memory(memory: dict, key: str, entry: dict) -> dict:
+    """
+    Ensure one entry per key in the memory dictionary.
+    """
+    if key not in memory:
+        memory[key] = entry
+        logger.info(f"Categorization memory updated with key: {key}")
+    else:
+        logger.debug(f"Memory key already exists: {key}")
+    return memory
 
 # --- Unhandled file data management ---
 def load_unhandled() -> list:
@@ -135,21 +146,18 @@ def analyze_file(file: Path, context: dict, memory: dict, unhandled: list):
         content = f"[Binary file type: {suffix}. No text content extracted.]"
         logger.info(f"Binary file: {file.name} — skipping summarization.")
     else:
-        # Unknown file type => record for user guidance
         content = f"[Unknown or unsupported file type: {suffix}]"
         logger.warning(f"Unknown file type: {file.name}. Recording for review.")
         unhandled = record_unhandled(unhandled, file, suffix, subject, sender)
 
-    # Summarize if content or placeholder is extractable
+    # Summarize if extractable
     if not content.startswith("[") or content.startswith("[Unknown"):
-        # For extractable or unknown, attempt summarization
         try:
             result = summarize_document(content, file.name)
         except Exception as e:
             logger.error(f"Summarization failed for {file.name}: {e}")
             result = {"summary": content, "contains_structured_data": False, "notes": ""}
     else:
-        # Binary or unknown use placeholder result
         result = {"summary": content, "contains_structured_data": False, "notes": "Skipped AI summarization."}
 
     # Enrich result and save
@@ -241,4 +249,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-```

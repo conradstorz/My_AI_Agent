@@ -9,61 +9,47 @@ from dotenv import load_dotenv
 load_dotenv(override=True)
 client = OpenAI()
 
-def summarize_document(content: str, filename: str) -> dict:
-    logger.info(f"Starting summarization for: {filename}")
-    truncated_content = content[:3500]
-    
-    prompt = f"""You are an assistant helping to classify and extract useful information from uploaded documents.
-
-Here is the content of a file named '{filename}':
----
-{truncated_content}
----
-
-TASKS:
-1. Summarize this document for a human reader.
-2. Determine if this document contains structured tabular data, like invoices, reports, bank statements, or spreadsheets with labeled columns.
-3. Respond in JSON with the following fields:
-- "summary": <your summary>,
-- "contains_structured_data": true or false,
-- "notes": any extra comments about how reliable or clean the data looks.
-"""
-
-    logger.debug(f"[{filename}] Prepared prompt (first 200 chars):\n{prompt[:200]}...")
-
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.3
+def summarize_document(text: str, filename: str) -> dict:
+    """
+    Summarizes text and detects structure. 
+    Returns exactly one JSON object with keys:
+      - summary            (string)
+      - contains_structured_data (boolean)
+      - notes              (string)
+    The assistant MUST output only valid JSON—nothing else.
+    """
+    system = {
+        "role": "system",
+        "content": (
+            "You are a document-processing assistant. "
+            "When given text, you will output exactly one JSON object "
+            "and nothing else—no bullet points, no introductory text, "
+            "no code fences. The JSON MUST have these three fields:\n"
+            "  • summary (a concise prose summary)\n"
+            "  • contains_structured_data (true or false)\n"
+            "  • notes (any caveats or observations)\n"
         )
-        content = response.choices[0].message.content
-        logger.debug(f"[{filename}] Raw OpenAI response:\n{content}")
-        
-        parsed = json.loads(content)
-        result = {
-            "summary": parsed.get("summary"),
-            "contains_structured_data": parsed.get("contains_structured_data"),
-            "notes": parsed.get("notes"),
-            "success": True
-        }
-        logger.info(f"[{filename}] Summary success. Structured data: {result['contains_structured_data']}")
-        return result
+    }
+    user = {
+        "role": "user",
+        "content": (
+            f"Document filename: {filename}\n\n"
+            "Here is the document text:\n"
+            "```\n"
+            f"{text}\n"
+            "```\n"
+            "Please respond with one valid JSON object as described."
+        )
+    }
 
-    except json.JSONDecodeError:
-        logger.error(f"[{filename}] OpenAI response was not valid JSON.")
-        return {
-            "summary": content,
-            "contains_structured_data": None,
-            "success": False,
-            "error": "invalid JSON"
-        }
+    resp = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[system, user],
+        temperature=0,
+    )
+    raw = resp.choices[0].message.content.strip()
+    # Optionally log raw for future debugging:
+    logger.debug(f"[{filename}] Raw JSON response:\n{raw}")
 
-    except Exception as e:
-        logger.exception(f"[{filename}] OpenAI error during summarization: {e}")
-        return {
-            "summary": None,
-            "contains_structured_data": None,
-            "success": False,
-            "error": str(e)
-        }
+    # Parse and return
+    return json.loads(raw)
