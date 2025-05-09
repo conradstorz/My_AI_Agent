@@ -1,4 +1,8 @@
-
+#!/usr/bin/env python3
+"""
+Flat functional File Analyzer for processing downloaded files and messages,
+extracting content, summarizing via OpenAI, and storing analysis results.
+"""
 from pathlib import Path
 import json
 import time
@@ -8,112 +12,70 @@ import fitz  # PyMuPDF
 import pandas as pd
 from utils.openai_tools import summarize_document
 
-# --- Paths ---
+# Global paths and state files
 BASE_DIR = Path(__file__).resolve().parent
 DOWNLOADS_DIR = BASE_DIR / "downloads"
 ANALYSIS_DIR = BASE_DIR / "analysis"
 RESULTS_DIR = BASE_DIR / "results"
-MEMORY_FILE = BASE_DIR / "categorization_memory.json"
-UNHANDLED_FILEDATA = BASE_DIR / "unhandled_filedata.json"
 LOGS_DIR = BASE_DIR / "logs"
+MEMORY_FILE = BASE_DIR / "categorization_memory.json"
+UNHANDLED_FILE = BASE_DIR / "unhandled_filedata.json"
 
-# Ensure necessary directories exist
-for d in (LOGS_DIR, ANALYSIS_DIR, DOWNLOADS_DIR, RESULTS_DIR):
-    d.mkdir(parents=True, exist_ok=True)
-
-# Configure logging
-logger.add(LOGS_DIR / "file_analyzer.log", rotation="1 week")
-
-# Load environment
-load_dotenv()
-
-# --- Memory management ---
-def load_memory() -> dict:
-    if MEMORY_FILE.exists():
-        with MEMORY_FILE.open("r", encoding="utf-8") as f:
-            return json.load(f)
-    return {}
-
-def save_memory(memory: dict):
-    with MEMORY_FILE.open("w", encoding="utf-8") as f:
-        json.dump(memory, f, indent=2)
-
-def update_memory(memory: dict, key: str, entry: dict) -> dict:
-    """
-    Ensure one entry per key in the memory dictionary.
-    """
-    if key not in memory:
-        memory[key] = entry
-        logger.info(f"Categorization memory updated with key: {key}")
-    else:
-        logger.debug(f"Memory key already exists: {key}")
-    return memory
-
-# --- Unhandled file data management ---
-def load_unhandled() -> list:
-    if UNHANDLED_FILEDATA.exists():
-        with UNHANDLED_FILEDATA.open("r", encoding="utf-8") as f:
-            return json.load(f)
-    return []
-
-def save_unhandled(unhandled: list):
-    with UNHANDLED_FILEDATA.open("w", encoding="utf-8") as f:
-        json.dump(unhandled, f, indent=2)
-
-def record_unhandled(unhandled: list, file: Path, suffix: str, subject: str, sender: str) -> list:
-    entry = {
-        "filename": file.name,
-        "filetype": suffix,
-        "subject": subject,
-        "sender": sender,
-        "timestamp": time.time()
-    }
-    if entry not in unhandled:
-        unhandled.append(entry)
-        logger.info(f"Recorded unhandled file type: {file.name}")
-    return unhandled
-
-# --- Helpers ---
-def extract_text_from_pdf(file: Path) -> str:
-    doc = fitz.open(file)
-    text = "\n".join(page.get_text() for page in doc)
-    doc.close()
-    return text
+# In-memory state
+memory = {}
+unhandled = []
+context = {}
 
 
-def extract_text_from_excel(file: Path) -> str:
+def ensure_directories():
+    """Create required directories if they don't exist."""
+    for d in (DOWNLOADS_DIR, ANALYSIS_DIR, RESULTS_DIR, LOGS_DIR):
+        d.mkdir(parents=True, exist_ok=True)
+
+
+def configure_logging():
+    """Configure Loguru to write to a rotating log file."""
+    log_path = LOGS_DIR / "file_analyzer.log"
+    logger.add(log_path, rotation="1 week", retention="4 weeks", level="DEBUG")
+
+
+def load_json(path: Path, default):
+    """Load JSON data from a file or return a default value."""
+    if path.exists():
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except Exception as e:
+            logger.error(f"Failed to load JSON from {path.name}: {e}")
+    return default
+
+
+def save_json(data, path: Path):
+    """Save data as JSON to the given path."""
     try:
-        excel = pd.read_excel(file, sheet_name=None, engine="openpyxl")
+        path.write_text(json.dumps(data, indent=2), encoding="utf-8")
     except Exception as e:
-        logger.error(f"Failed to read Excel file {file.name}: {e}")
-        return ""
-    summaries = []
-    for sheet, df in excel.items():
-        summaries.append(f"--- Sheet: {sheet} ---")
-        summaries.append(df.head(10).to_string(index=False))
-        summaries.append("")
-    return "\n".join(summaries)
+        logger.error(f"Failed to save JSON to {path.name}: {e}")
 
 
-def has_been_analyzed(stem: str) -> bool:
-    return (ANALYSIS_DIR / f"{stem}.analysis.json").exists()
-
-
-def load_downloaded_file_metadata() -> dict:
+def load_context() -> dict:
+    """Load file metadata from gmail_downloader.json."""
     path = RESULTS_DIR / "gmail_downloader.json"
     if not path.exists():
         logger.warning("No gmail_downloader.json found.")
         return {}
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-        return {item["filename"]: {"subject": item.get("subject"), "sender": item.get("sender")}
-                for item in data.get("downloads", [])}
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        return {
+            item["filename"]: {"subject": item.get("subject", "(unknown)"), "sender": item.get("sender", "(unknown)")}
+            for item in raw.get("downloads", [])
+        }
     except Exception as e:
-        logger.error(f"Failed to load gmail_downloader.json: {e}")
+        logger.error(f"Failed to load context: {e}")
         return {}
 
 
-def load_fetched_messages() -> list:
+def load_messages() -> list:
+    """Load inline messages from gmail_query_fetcher.json."""
     path = RESULTS_DIR / "gmail_query_fetcher.json"
     if not path.exists():
         logger.warning("No gmail_query_fetcher.json found.")
@@ -122,130 +84,171 @@ def load_fetched_messages() -> list:
         data = json.loads(path.read_text(encoding="utf-8"))
         return data.get("messages_saved", [])
     except Exception as e:
-        logger.error(f"Failed to load gmail_query_fetcher.json: {e}")
+        logger.error(f"Failed to load messages: {e}")
         return []
 
-# --- Main analyzers ---
-def analyze_file(file: Path, context: dict, memory: dict, unhandled: list):
+
+def is_analyzed(stem: str) -> bool:
+    """Check if an analysis file already exists for a stem."""
+    return (ANALYSIS_DIR / f"{stem}.analysis.json").exists()
+
+
+def extract_pdf(file: Path) -> str:
+    """Extract all text from a PDF using PyMuPDF."""
+    doc = fitz.open(file)
+    text = "\n".join(page.get_text() for page in doc)
+    doc.close()
+    return text
+
+
+def extract_excel(file: Path) -> str:
+    """Read first 10 rows of each sheet in an Excel file."""
+    try:
+        sheets = pd.read_excel(file, sheet_name=None, engine="openpyxl")
+    except Exception as e:
+        logger.error(f"Excel read error: {file.name} - {e}")
+        return ""
+    blocks = []
+    for name, df in sheets.items():
+        blocks.append(f"--- Sheet: {name} ---")
+        blocks.append(df.head(10).to_string(index=False))
+    return "\n".join(blocks)
+
+
+def extract_content(file: Path) -> str:
+    """Extract text content or mark binary/unsupported types."""
+    suffix = file.suffix.lower()
+    if suffix == ".pdf":
+        return extract_pdf(file)
+    if suffix in {".xls", ".xlsx"}:
+        return extract_excel(file)
+    if suffix in {".txt", ".html", ".csv", ".log"}:
+        return file.read_text(encoding="utf-8", errors="ignore")
+    if suffix in {".jpg", ".jpeg", ".png", ".gif", ".zip", ".rar"}:
+        logger.info(f"Skipping binary file: {file.name}")
+        record_unhandled(file, suffix)
+        return f"[Binary file type: {suffix}]"
+    logger.warning(f"Unsupported file type: {file.name}")
+    record_unhandled(file, suffix)
+    return f"[Unsupported file type: {suffix}]"
+
+
+def record_unhandled(file: Path, suffix: str):
+    """Record metadata for unsupported or binary files."""
+    entry = {"filename": file.name, "filetype": suffix,
+             "subject": context.get(file.name, {}).get("subject", "(unknown)"),
+             "sender": context.get(file.name, {}).get("sender", "(unknown)"),
+             "timestamp": time.time()}
+    if entry not in unhandled:
+        unhandled.append(entry)
+        logger.info(f"Recorded unhandled file: {file.name}")
+
+
+def summarize_content(content: str, identifier: str) -> dict:
+    """Use AI to summarize content unless marked for skip."""
+    if content.startswith("["):
+        return {"summary": content, "contains_structured_data": False, "notes": "Skipped AI summarization."}
+    try:
+        return summarize_document(content, identifier)
+    except Exception as e:
+        logger.error(f"Summarization error for {identifier}: {e}")
+        return {"summary": content, "contains_structured_data": False, "notes": ""}
+
+
+def save_analysis(stem: str, analysis: dict):
+    """Write analysis JSON to the analysis directory."""
+    path = ANALYSIS_DIR / f"{stem}.analysis.json"
+    try:
+        path.write_text(json.dumps(analysis, indent=2), encoding="utf-8")
+        logger.info(f"Saved analysis: {path.name}")
+    except Exception as e:
+        logger.error(f"Failed to save analysis for {stem}: {e}")
+
+
+def update_memory(key: str, entry: dict):
+    """Add a new entry to memory if key is not present."""
+    if key not in memory:
+        memory[key] = entry
+        logger.info(f"Memory updated: {key}")
+
+
+def process_file(file: Path):
+    """Extract, summarize, and record analysis for a single file."""
     logger.info(f"Analyzing file: {file.name}")
     suffix = file.suffix.lower()
     meta = context.get(file.name, {})
     subject = meta.get("subject", "(unknown)")
     sender = meta.get("sender", "(unknown)")
 
-    # Extract or read content
-    if suffix == ".pdf":
-        content = extract_text_from_pdf(file)
-    elif suffix == ".txt":
-        content = file.read_text(encoding="utf-8", errors="ignore")
-    elif suffix in {".xls", ".xlsx"}:
-        content = extract_text_from_excel(file)
-    elif suffix in {".html", ".csv", ".log"}:
-        content = file.read_text(encoding="utf-8", errors="ignore")
-    elif suffix in {".jpg", ".jpeg", ".png", ".gif", ".zip", ".rar"}:
-        content = f"[Binary file type: {suffix}. No text content extracted.]"
-        logger.info(f"Binary file: {file.name} — skipping summarization.")
-    else:
-        content = f"[Unknown or unsupported file type: {suffix}]"
-        logger.warning(f"Unknown file type: {file.name}. Recording for review.")
-        unhandled = record_unhandled(unhandled, file, suffix, subject, sender)
+    content = extract_content(file)
+    summary_data = summarize_content(content, file.name)
 
-    # Summarize if extractable
-    if not content.startswith("[") or content.startswith("[Unknown"):
-        try:
-            result = summarize_document(content, file.name)
-        except Exception as e:
-            logger.error(f"Summarization failed for {file.name}: {e}")
-            result = {"summary": content, "contains_structured_data": False, "notes": ""}
-    else:
-        result = {"summary": content, "contains_structured_data": False, "notes": "Skipped AI summarization."}
+    analysis = {"filename": file.name, "timestamp": time.time(),
+                "filetype": suffix, "subject": subject, "sender": sender,
+                **summary_data}
+    save_analysis(file.stem, analysis)
 
-    # Enrich result and save
-    result.update({
-        "filename": file.name,
-        "timestamp": time.time(),
-        "filetype": suffix,
-        "subject": subject,
-        "sender": sender
-    })
-    out_file = ANALYSIS_DIR / f"{file.stem}.analysis.json"
-    out_file.write_text(json.dumps(result, indent=2), encoding="utf-8")
-    logger.info(f"Saved analysis to {out_file.name}")
-
-    # Categorization memory: one entry per sender per file type
     key = f"SENDER::{sender}::{suffix}"
-    entry = {
-        "source": sender,
-        "filetype": suffix,
-        "summary": result.get("summary"),
-        "contains_structured_data": result.get("contains_structured_data"),
-        "category": "(uncategorized)",
-        "notes": ""
-    }
-    memory = update_memory(memory, key, entry)
-    return memory, unhandled
+    update_memory(key, {"source": sender, "filetype": suffix,
+                          "summary": analysis["summary"],
+                          "contains_structured_data": analysis["contains_structured_data"],
+                          "category": "(uncategorized)", "notes": ""})
 
 
-def analyze_message_body(message: dict, memory: dict, unhandled: list):
+def process_message(message: dict):
+    """Extract, summarize, and record analysis for an inline message."""
     msg_id = message.get("message_id", "unknown")
-    if has_been_analyzed(msg_id):
-        logger.debug(f"Already analyzed message: {msg_id}")
-        return memory, unhandled
-
-    subject = message.get("subject", "(no subject)")
-    sender = message.get("sender", "(no sender)")
+    logger.info(f"Analyzing message: {msg_id}")
     body = message.get("body", "")
+    summary_data = summarize_content(body, f"{msg_id}.txt")
 
-    logger.info(f"Analyzing message ID: {msg_id}")
-    try:
-        result = summarize_document(body, f"{msg_id}.txt")
-    except Exception as e:
-        logger.error(f"Summarization failed for message {msg_id}: {e}")
-        result = {"summary": body, "contains_structured_data": False, "notes": ""}
-    result.update({
-        "message_id": msg_id,
-        "timestamp": time.time(),
-        "filetype": "inline-message",
-        "subject": subject,
-        "sender": sender
-    })
+    analysis = {"message_id": msg_id, "timestamp": time.time(),
+                "filetype": "inline-message", "subject": message.get("subject", "(no subject)"),
+                "sender": message.get("sender", "(no sender)"), **summary_data}
+    save_analysis(msg_id, analysis)
 
-    out_file = ANALYSIS_DIR / f"{msg_id}.analysis.json"
-    out_file.write_text(json.dumps(result, indent=2), encoding="utf-8")
-    logger.info(f"Saved analysis to {out_file.name}")
+    key = f"MSG::{analysis['sender']}"
+    update_memory(key, {"source": analysis["sender"],
+                          "subject": analysis["subject"],
+                          "summary": analysis["summary"],
+                          "contains_structured_data": analysis["contains_structured_data"],
+                          "category": "(uncategorized)", "notes": ""})
 
-    # Memory for messages grouped by sender
-    key = f"MSG::{sender}"
-    entry = {
-        "source": sender,
-        "subject": subject,
-        "summary": result.get("summary"),
-        "contains_structured_data": result.get("contains_structured_data"),
-        "category": "(uncategorized)",
-        "notes": ""
-    }
-    memory = update_memory(memory, key, entry)
-    return memory, unhandled
+
+def run():
+    """Analyze all downloaded files and fetched messages."""
+    logger.info("Starting analysis...")
+    for file in DOWNLOADS_DIR.glob("*.*"):
+        if is_analyzed(file.stem):
+            logger.debug(f"Already analyzed: {file.name}")
+            continue
+        process_file(file)
+
+    for message in load_messages():
+        msg_id = message.get("message_id", "")
+        if is_analyzed(msg_id):
+            logger.debug(f"Already analyzed message: {msg_id}")
+            continue
+        process_message(message)
 
 
 def main():
-    logger.info("File Analyzer starting...")
-    memory = load_memory()
-    unhandled = load_unhandled()
-    context = load_downloaded_file_metadata()
+    """Entry point: setup and execute analysis."""
+    ensure_directories()
+    configure_logging()
+    load_dotenv()
 
-    for file in DOWNLOADS_DIR.glob("*.*"):
-        if has_been_analyzed(file.stem):
-            logger.debug(f"Already analyzed: {file.name}")
-            continue
-        memory, unhandled = analyze_file(file, context, memory, unhandled)
+    global memory, unhandled, context
+    memory = load_json(MEMORY_FILE, {})
+    unhandled = load_json(UNHANDLED_FILE, [])
+    context = load_context()
 
-    for message in load_fetched_messages():
-        memory, unhandled = analyze_message_body(message, memory, unhandled)
+    run()
 
-    save_memory(memory)
-    save_unhandled(unhandled)
-    logger.info("File Analyzer finished.")
+    save_json(memory, MEMORY_FILE)
+    save_json(unhandled, UNHANDLED_FILE)
+    logger.info("Analysis complete.")
+
 
 if __name__ == "__main__":
     main()
