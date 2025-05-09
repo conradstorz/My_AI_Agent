@@ -12,7 +12,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
 # Load environment variables
-load_dotenv()
+load_dotenv(override=True)
 
 # --- Configuration ---
 BASE_DIR = Path(__file__).resolve().parent

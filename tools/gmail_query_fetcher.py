@@ -19,7 +19,7 @@ LOGS_DIR = BASE_DIR / "logs"
 TOKEN_FILE = BASE_DIR / "token.json"
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 
-load_dotenv()
+load_dotenv(override=True)
 LOGS_DIR.mkdir(exist_ok=True)
 logger.add(LOGS_DIR / "gmail_query_fetcher.log", rotation="1 week")
 

@@ -13,14 +13,15 @@ DOWNLOADS_DIR = BASE_DIR / "downloads"
 ANALYSIS_DIR = BASE_DIR / "analysis"
 RESULTS_DIR = BASE_DIR / "results"
 MEMORY_FILE = BASE_DIR / "categorization_memory.json"
+LOGS_DIR = BASE_DIR / "logs"
 
 GMAIL_DOWNLOAD_RESULT = RESULTS_DIR / "gmail_downloader.json"
 GMAIL_QUERY_RESULT = RESULTS_DIR / "gmail_query_fetcher.json"
-LOGS_DIR = BASE_DIR / "logs"
+
 LOGS_DIR.mkdir(exist_ok=True)
 logger.add(LOGS_DIR / "file_analyzer.log", rotation="1 week")
+ANALYSIS_DIR.mkdir(parents=True, exist_ok=True)
 
-ANALYSIS_DIR.mkdir(exist_ok=True, parents=True)
 load_dotenv()
 
 # --- Categorization memory ---
@@ -38,9 +39,11 @@ def update_memory(memory: dict, key: str, entry: dict):
     if key not in memory:
         memory[key] = entry
         logger.info(f"Categorization memory updated with key: {key}")
+    else:
+        logger.debug(f"Memory key already exists: {key}")
     return memory
 
-# --- File extractors ---
+# --- Helpers ---
 def extract_text_from_pdf(file: Path) -> str:
     doc = fitz.open(file)
     text = "\n".join(page.get_text() for page in doc)
@@ -63,7 +66,6 @@ def extract_text_from_excel(file: Path) -> str:
 def has_been_analyzed(stem: str) -> bool:
     return (ANALYSIS_DIR / f"{stem}.analysis.json").exists()
 
-# --- Result source loaders ---
 def load_downloaded_file_metadata() -> dict:
     if not GMAIL_DOWNLOAD_RESULT.exists():
         logger.warning("No gmail_downloader.json found.")
@@ -89,12 +91,15 @@ def load_fetched_messages() -> list:
         logger.error(f"Failed to load gmail_query_fetcher.json: {e}")
         return []
 
-# --- Analysis logic ---
+# --- Main analyzers ---
 def analyze_file(file: Path, context: dict, memory: dict):
     logger.info(f"Analyzing file: {file.name}")
     suffix = file.suffix.lower()
+    metadata = context.get(file.name, {})
+    subject = metadata.get("subject", "(unknown)")
+    sender = metadata.get("sender", "(unknown)")
 
-    # Try to extract readable content
+    # Content extraction
     if suffix == ".pdf":
         content = extract_text_from_pdf(file)
     elif suffix == ".txt":
@@ -105,15 +110,12 @@ def analyze_file(file: Path, context: dict, memory: dict):
         content = file.read_text(encoding="utf-8", errors="ignore")
     elif suffix in {".jpg", ".jpeg", ".png", ".gif", ".zip", ".rar"}:
         content = f"[Binary file type: {suffix}. No text content extracted.]"
-        logger.info(f"Binary file: {file.name} — logged for review.")
+        logger.info(f"Binary file: {file.name} — skipping summarization.")
     else:
         content = f"[Unknown or unsupported file type: {suffix}]"
         logger.warning(f"Unknown file type: {file.name} — placeholder used.")
 
-    metadata = context.get(file.name, {})
-    subject = metadata.get("subject", "(unknown)")
-    sender = metadata.get("sender", "(unknown)")
-
+    # Summarize if it's not binary
     result = summarize_document(content, file.name) if "No text content" not in content else {
         "summary": content,
         "contains_structured_data": False,
@@ -134,17 +136,32 @@ def analyze_file(file: Path, context: dict, memory: dict):
         json.dump(result, f, indent=2)
     logger.info(f"Saved analysis to {out_file.name}")
 
-    memory_key = f"FILE::{file.name}"
-    memory_entry = {
-        "source": sender,
-        "subject": subject,
-        "summary": result.get("summary"),
-        "contains_structured_data": result.get("contains_structured_data"),
-        "category": "(uncategorized)",
-        "notes": ""
-    }
-    update_memory(memory, memory_key, memory_entry)
+    # Categorization memory deduplication
+    if suffix in {".jpg", ".jpeg", ".png", ".gif", ".zip", ".rar"}:
+        memory_key = f"SENDER::{sender}::{suffix}"
+        if memory_key in memory:
+            logger.debug(f"Skipping duplicate memory entry for {memory_key}")
+            return
+        memory_entry = {
+            "source": sender,
+            "filetype": suffix,
+            "summary": f"[Binary file type: {suffix}. Multiple files from this sender.]",
+            "contains_structured_data": False,
+            "category": "(uncategorized)",
+            "notes": ""
+        }
+    else:
+        memory_key = f"FILE::{file.name}"
+        memory_entry = {
+            "source": sender,
+            "subject": subject,
+            "summary": result.get("summary"),
+            "contains_structured_data": result.get("contains_structured_data"),
+            "category": "(uncategorized)",
+            "notes": ""
+        }
 
+    update_memory(memory, memory_key, memory_entry)
 
 def analyze_message_body(message: dict, memory: dict):
     msg_id = message.get("message_id", "unknown")
@@ -188,16 +205,14 @@ def main():
     logger.info("File Analyzer starting...")
 
     memory = load_memory()
-
-    # Analyze files from downloads/
     attachment_context = load_downloaded_file_metadata()
+
     for file in DOWNLOADS_DIR.glob("*.*"):
         if has_been_analyzed(file.stem):
             logger.debug(f"Already analyzed: {file.name}")
             continue
         analyze_file(file, attachment_context, memory)
 
-    # Analyze fetched messages
     for message in load_fetched_messages():
         analyze_message_body(message, memory)
 

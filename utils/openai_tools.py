@@ -6,7 +6,7 @@ from loguru import logger
 from openai import OpenAI
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
 client = OpenAI()
 
 def summarize_document(content: str, filename: str) -> dict:

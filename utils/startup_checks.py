@@ -42,7 +42,7 @@ def check_directories():
             logger.debug(f"📁 Exists: {d}")
 
 def check_environment_vars():
-    load_dotenv()
+    load_dotenv(override=True)
     env_file_values = dotenv_values()
 
     for var in REQUIRED_ENV_VARS:
