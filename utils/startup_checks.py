@@ -2,8 +2,10 @@ from pathlib import Path
 from loguru import logger
 import importlib
 import os
+import sys
 import json
-from dotenv import load_dotenv  
+from dotenv import dotenv_values, load_dotenv
+ 
 import time
 
 REQUIRED_MODULES = [
@@ -40,11 +42,21 @@ def check_directories():
             logger.debug(f"📁 Exists: {d}")
 
 def check_environment_vars():
+    load_dotenv()
+    env_file_values = dotenv_values()
+
     for var in REQUIRED_ENV_VARS:
-        if os.getenv(var) is None:
-            logger.warning(f"🟡 Missing env var: {var}")
+        val = os.getenv(var)
+
+        if val is None:
+            logger.critical(f"❌ Missing required environment variable: {var}")
+            sys.exit(1)
         else:
-            logger.debug(f"🔑 Env var set: {var}")
+            if var not in env_file_values:
+                logger.warning(f"🟡 {var} found in system environment but missing from .env file")
+            else:
+                logger.debug(f"🔑 {var} loaded from .env file")
+
 
 def write_summary(status: str, summary: str):
     heartbeat_dir = Path("heartbeat")

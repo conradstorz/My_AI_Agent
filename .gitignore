@@ -18,11 +18,11 @@ token.json
 credentials.json
 
 # Tool-generated results
-AI_Agent/tools/results/
-AI_Agent/tools/analysis/
-AI_Agent/tools/downloads/   
-AI_Agent/tools/downloaded_attachments.json
-AI_Agent/tools/analysis/analysis.json
+tools/results/
+tools/analysis/
+tools/downloads/   
+tools/downloaded_attachments.json
+tools/analysis/analysis.json
 
 # Heartbeat files
 heartbeat/
