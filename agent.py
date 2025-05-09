@@ -1,3 +1,6 @@
+# agent.py
+
+import time
 import subprocess
 import sys
 import time
@@ -34,7 +37,10 @@ def agent_loop():
 
         run_tool("tools.gmail_downloader", "Gmail Downloader")
         run_tool("tools.file_analyzer", "File Analyzer")
+        run_tool("tools.process_downloaded_data", "Process Downloaded Data")
 
         logger.info(f"Sleeping for {LOOP_DELAY} seconds...")
         time.sleep(LOOP_DELAY)
 
+if __name__ == "__main__":
+    agent_loop()
