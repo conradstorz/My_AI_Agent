@@ -56,6 +56,20 @@ def main():
 
     logger.info(f"Loaded {total_entries} memory entries")
 
+    # now load list of unhandled file data
+    unhandled = []
+    if UNHANDLED_FILEDATA.exists():
+        try:
+            unhandled = json.loads(UNHANDLED_FILEDATA.read_text(encoding="utf-8"))
+            logger.info(f"Loaded {len(unhandled)} unhandled file data entries")
+        except Exception as e:
+            logger.error(f"Failed to load unhandled file data: {e}")
+        
+
+
+
+
+
     for key, entry in memory.items():
         directive = entry.get("notes", "").strip().lower()
         logger.debug(f"Processing entry key={key!r}, directive={directive!r}")
