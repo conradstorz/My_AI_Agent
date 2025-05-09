@@ -1,27 +1,20 @@
 import subprocess
 import sys
-import json
 import time
 from pathlib import Path
 from loguru import logger
 
-# --- Configuration ---
-BASE_DIR = Path(__file__).resolve().parent
-TOOLS_DIR = BASE_DIR / "tools"
-RESULTS_DIR = TOOLS_DIR / "results"
-LOGS_DIR = BASE_DIR / "logs"
+# Configuration
+LOOP_DELAY = 300  # seconds between cycles
 
-GMAIL_DOWNLOADER_SCRIPT = TOOLS_DIR / "gmail_downloader.py"
-FILE_ANALYZER_SCRIPT = TOOLS_DIR / "file_analyzer.py"
-GMAIL_RESULT = RESULTS_DIR / "gmail_downloader.json"
+LOGS_DIR = Path(__file__).parent / "logs"
+LOGS_DIR.mkdir(exist_ok=True)
 
-LOOP_DELAY = 300  # seconds (5 minutes)
-
-def run_tool(script_path: Path, label: str) -> bool:
+def run_tool(module: str, label: str) -> bool:
     logger.info(f"Invoking {label}...")
     try:
         result = subprocess.run(
-            [sys.executable, "-m", str(script_path)],
+            [sys.executable, "-m", module],
             check=True,
             capture_output=True,
             text=True
@@ -33,21 +26,15 @@ def run_tool(script_path: Path, label: str) -> bool:
         return False
 
 def agent_loop():
-    LOGS_DIR.mkdir(exist_ok=True)
     logger.add(LOGS_DIR / "agent.log", rotation="1 week")
     logger.info("Agent loop starting...")
 
     while True:
         logger.info("=== New agent cycle ===")
 
-        # Step 1: Download Gmail attachments
-        success = run_tool(GMAIL_DOWNLOADER_SCRIPT, "Gmail Downloader")
-
-        # Step 2: Analyze downloaded files regardless of success
-        run_tool(FILE_ANALYZER_SCRIPT, "File Analyzer")
+        run_tool("my_ai_agent.tools.gmail_downloader", "Gmail Downloader")
+        run_tool("my_ai_agent.tools.file_analyzer", "File Analyzer")
 
         logger.info(f"Sleeping for {LOOP_DELAY} seconds...")
         time.sleep(LOOP_DELAY)
 
-if __name__ == "__main__":
-    agent_loop()
