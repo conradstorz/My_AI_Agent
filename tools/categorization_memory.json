@@ -86,5 +86,21 @@
     "contains_structured_data": false,
     "category": "(uncategorized)",
     "notes": ""
+  },
+  "SENDER::(unknown)::.jpg": {
+    "source": "(unknown)",
+    "filetype": ".jpg",
+    "summary": "[Binary file type: .jpg]",
+    "contains_structured_data": false,
+    "category": "(uncategorized)",
+    "notes": ""
+  },
+  "SENDER::(unknown)::.pdf": {
+    "source": "(unknown)",
+    "filetype": ".pdf",
+    "summary": "The document is empty and contains no content.",
+    "contains_structured_data": false,
+    "category": "(uncategorized)",
+    "notes": ""
   }
 }
