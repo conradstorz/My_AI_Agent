@@ -146,9 +146,35 @@ def main():
     # Ensure archive directory exists
     paths["archive_dir"].mkdir(exist_ok=True)
 
-    # Optionally load unhandled data (not used here but could be extended)
-    _ = load_json(paths["unhandled_path"], default=[])
+    # load unhandled data 
+    unhandled_data = load_json(paths["unhandled_path"], default=[])
 
+    if unhandled_data:
+        logger.info(f"Found unhandled data: {len(unhandled_data)} entries")
+        # Remove entries from unhandled data that are already in memory
+        for entry in unhandled_data:
+            key = entry.get("key")
+            if key in memory:
+                logger.info(f"Removing {key} from unhandled data")
+                unhandled_data.remove(entry)
+
+        # process each item in unhandled data
+        for entry in unhandled_data:
+            file_path = entry.get("file_path")
+            if file_path:
+                file_path = paths["downloads_dir"] / file_path
+                if file_path.exists():
+                    logger.info(f"Processing unhandled file: {file_path.name}")
+                    # read the notes for this data item and see if there is processing we can do.
+                else:
+                    logger.warning(f"File not found: {file_path.name}")
+            else:
+                logger.warning("No file path provided in unhandled data entry")
+
+
+        # Save updated unhandled data
+        with paths["unhandled_path"].open("w") as f:
+            json.dump(unhandled_data, f, indent=2)
     stats = process_memory_entries(
         memory,
         paths["downloads_dir"],
