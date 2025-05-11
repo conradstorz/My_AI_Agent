@@ -75,10 +75,10 @@ def load_context() -> dict:
 
 
 def load_messages() -> list:
-    """Load inline messages from gmail_query_fetcher.json."""
-    path = RESULTS_DIR / "gmail_query_fetcher.json"
+    """Load inline messages from gmail_downloader.json."""
+    path = RESULTS_DIR / "gmail_downloader.json"
     if not path.exists():
-        logger.warning("No gmail_query_fetcher.json found.")
+        logger.warning(f"No {path} found.")
         return []
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
