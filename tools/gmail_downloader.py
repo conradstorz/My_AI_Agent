@@ -268,7 +268,7 @@ def write_result(downloaded_info):
         "timestamp": time.time()
     }
     # Append JSON object to the results file for auditing
-    with RESULTS_FILE.open("a") as f:
+    with RESULTS_FILE.open("a") as f:  # this does not work it corrupts the json file
         json.dump(result, f, indent=2)
     logger.info(f"Result JSON appended to: {RESULTS_FILE}")
 
