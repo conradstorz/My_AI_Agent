@@ -1,11 +1,12 @@
 '''
 terminal_analysis.py
 
-Script to analyze CSV data focusing on the 'Terminal' column in various ways.
+Script to analyze CSV data focusing on the 'Terminal' column and forecast future settlement amounts.
 '''
 import argparse
 import sys
 from pathlib import Path
+from datetime import datetime, timedelta
 
 import pandas as pd
 from loguru import logger
@@ -20,30 +21,29 @@ def parse_args():
     """
     Parse command-line arguments.
 
-    :returns: Namespace containing input_file (Path to the CSV file)
+    :returns: Namespace containing input_file and forecast_days
     :rtype: argparse.Namespace
     """
     parser = argparse.ArgumentParser(
-        description="Analyze 'Terminal' column in CSV data and provide summary statistics."
+        description="Analyze and forecast 'Terminal' settlement data in a CSV file."
     )
     parser.add_argument(
         "input_file",
         type=Path,
         help="Path to the CSV file to analyze."
     )
+    parser.add_argument(
+        "--forecast_days", "-f",
+        type=int,
+        default=5,
+        help="Number of future days to forecast (default: 5)."
+    )
     return parser.parse_args()
 
 
 def load_data(csv_path: Path) -> pd.DataFrame:
     """
-    Load CSV data into a pandas DataFrame.
-
-    :param csv_path: Path to the CSV file
-    :type csv_path: Path
-    :returns: DataFrame containing the CSV data
-    :rtype: pandas.DataFrame
-    :raises FileNotFoundError: if the file does not exist
-    :raises ValueError: if required columns are missing
+    Load CSV data into a pandas DataFrame and validate required columns.
     """
     logger.info(f"Loading data from {csv_path}")
     if not csv_path.exists():
@@ -58,86 +58,88 @@ def load_data(csv_path: Path) -> pd.DataFrame:
     if missing:
         logger.error(f"Missing required columns: {missing}")
         raise ValueError(f"Missing required columns: {missing}")
+    # Parse dates and numeric
+    df["Settlement Date"] = pd.to_datetime(df["Settlement Date"], errors="coerce")
+    df["Amount"] = pd.to_numeric(df["Amount"], errors="coerce").fillna(0)
     return df
 
 
 def list_unique_terminals(df: pd.DataFrame) -> pd.Series:
-    """
-    List unique Terminal values.
-
-    :param df: DataFrame with 'Terminal' column
-    :type df: pandas.DataFrame
-    :returns: Series of unique Terminal values
-    :rtype: pandas.Series
-    """
     uniques = df["Terminal"].dropna().unique()
     logger.debug(f"Found {len(uniques)} unique terminals")
     return pd.Series(uniques)
 
 
 def count_transactions_per_terminal(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Count the number of transactions per terminal.
-
-    :param df: DataFrame with 'Terminal' column
-    :type df: pandas.DataFrame
-    :returns: DataFrame with 'Terminal' and 'TransactionCount'
-    :rtype: pandas.DataFrame
-    """
-    counts = df.groupby("Terminal").size().reset_index(name="TransactionCount")
-    logger.debug("Computed transaction counts per terminal")
-    return counts
+    return df.groupby("Terminal").size().reset_index(name="TransactionCount")
 
 
 def sum_amount_per_terminal(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Sum the 'Amount' per terminal.
-
-    :param df: DataFrame with 'Terminal' and 'Amount' columns
-    :type df: pandas.DataFrame
-    :returns: DataFrame with 'Terminal' and 'TotalAmount'
-    :rtype: pandas.DataFrame
-    """
-    df["Amount"] = pd.to_numeric(df["Amount"], errors="coerce")
-    sums = df.groupby("Terminal")["Amount"].sum().reset_index(name="TotalAmount")
-    logger.debug("Computed total amount per terminal")
-    return sums
+    return df.groupby("Terminal")["Amount"].sum().reset_index(name="TotalAmount")
 
 
 def average_amount_per_terminal(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Compute average 'Amount' per terminal.
-
-    :param df: DataFrame with 'Terminal' and 'Amount' columns
-    :type df: pandas.DataFrame
-    :returns: DataFrame with 'Terminal' and 'AverageAmount'
-    :rtype: pandas.DataFrame
-    """
-    df["Amount"] = pd.to_numeric(df["Amount"], errors="coerce")
-    averages = df.groupby("Terminal")["Amount"].mean().reset_index(name="AverageAmount")
-    logger.debug("Computed average amount per terminal")
-    return averages
+    return df.groupby("Terminal")["Amount"].mean().reset_index(name="AverageAmount")
 
 
 def group_by_terminal_and_settlement_type(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Group transactions by terminal and settlement type.
+    return df.groupby(["Terminal", "Settlement Type"])["Amount"].sum().reset_index(name="TotalAmount")
 
-    :param df: DataFrame with 'Terminal', 'Settlement Type', and 'Amount' columns
-    :type df: pandas.DataFrame
-    :returns: DataFrame with 'Terminal', 'Settlement Type', and summed 'Amount'
-    :rtype: pandas.DataFrame
+
+def forecast_next_days(df: pd.DataFrame, days: int) -> pd.DataFrame:
     """
-    df["Amount"] = pd.to_numeric(df["Amount"], errors="coerce")
-    grouped = df.groupby(["Terminal", "Settlement Type"])["Amount"].sum()
-    logger.debug("Grouped by terminal and settlement type")
-    return grouped.reset_index(name="TotalAmount")
+    Predict total settlement amounts per terminal for the next `days` days,
+    using historical day-of-week averages.
+    """
+    # Compute daily totals per terminal
+    daily = (
+        df.groupby([
+            "Terminal",
+            df["Settlement Date"].dt.normalize().rename("Date")
+        ])
+        ["Amount"].sum()
+        .reset_index(name="DailyTotal")
+    )
+    # Add day of week
+    daily["DayOfWeek"] = daily["Date"].dt.day_name()
+
+    # Historical averages by terminal & day-of-week
+    dow_avg = (
+        daily.groupby(["Terminal", "DayOfWeek"])\
+.reset_index()[["Terminal", "DayOfWeek"]]
+    )
+    dow_avg = daily.groupby(["Terminal", "DayOfWeek"])["DailyTotal"].mean().reset_index(name="AvgDailyTotal")
+
+    # Overall terminal average fallback
+    overall_avg = daily.groupby("Terminal")["DailyTotal"].mean().reset_index(name="OverallAvg")
+
+    # Build forecast
+    today = datetime.now().date()
+    forecast_rows = []
+    terminals = df["Terminal"].dropna().unique()
+    for i in range(1, days + 1):
+        forecast_date = today + timedelta(days=i)
+        dow = forecast_date.strftime("%A")
+        for term in terminals:
+            match = dow_avg.loc[
+                (dow_avg["Terminal"] == term) &
+                (dow_avg["DayOfWeek"] == dow),
+                "AvgDailyTotal"
+            ]
+            if not match.empty:
+                amt = match.iloc[0]
+            else:
+                amt = overall_avg.loc[overall_avg["Terminal"] == term, "OverallAvg"].iloc[0]
+            forecast_rows.append({
+                "Terminal": term,
+                "Date": forecast_date,
+                "DayOfWeek": dow,
+                "PredictedAmount": amt
+            })
+    return pd.DataFrame(forecast_rows)
 
 
 def main():
-    """
-    Main entry point for the terminal analysis script.
-    """
     args = parse_args()
     try:
         df = load_data(args.input_file)
@@ -145,29 +147,24 @@ def main():
         logger.exception("Failed to load data")
         sys.exit(1)
 
-    # Unique terminals
+    # Existing analyses
     uniques = list_unique_terminals(df)
     logger.info(f"Unique terminals ({len(uniques)}): {uniques.tolist()}")
-
-    # Transaction counts
     counts = count_transactions_per_terminal(df)
-    logger.info("Transaction counts per terminal:")
-    logger.info(counts.to_string(index=False))
-
-    # Total amounts
+    logger.info("Transaction counts per terminal:\n" + counts.to_string(index=False))
     sums = sum_amount_per_terminal(df)
-    logger.info("Total amount per terminal:")
-    logger.info(sums.to_string(index=False))
-
-    # Average amounts
+    logger.info("Total amount per terminal:\n" + sums.to_string(index=False))
     avgs = average_amount_per_terminal(df)
-    logger.info("Average amount per terminal:")
-    logger.info(avgs.to_string(index=False))
-
-    # Group by settlement type
+    logger.info("Average amount per terminal:\n" + avgs.to_string(index=False))
     grouped = group_by_terminal_and_settlement_type(df)
-    logger.info("Amount by terminal and settlement type:")
-    logger.info(grouped.to_string(index=False))
+    logger.info("Amount by terminal and settlement type:\n" + grouped.to_string(index=False))
+
+    # Forecasting
+    forecast_df = forecast_next_days(df, args.forecast_days)
+    logger.info(
+        f"Forecast for next {args.forecast_days} days (with day-of-week):\n" +
+        forecast_df.to_string(index=False)
+    )
 
 
 if __name__ == "__main__":
