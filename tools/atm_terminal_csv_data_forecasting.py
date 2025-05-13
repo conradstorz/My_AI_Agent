@@ -3,7 +3,8 @@ terminal_forecast.py
 
 Advanced forecasting of future settlement trends per terminal
 using seasonal ARIMA (SARIMA). Enhanced data parsing, filters only 'Transaction' settlement types,
-produces both detailed per-day forecasts and aggregate total predictions per terminal.
+produces detailed per-day forecasts and aggregate total predictions per terminal, including location and
+USD-formatted totals.
 '''
 import argparse
 import sys
@@ -70,7 +71,7 @@ def load_data(csv_path: Path) -> pd.DataFrame:
         raise FileNotFoundError(f"File not found: {csv_path}")
     df = pd.read_csv(csv_path)
 
-    required = ["Terminal", "Settlement Date", "Amount", "Settlement Type"]
+    required = ["Terminal", "Location", "Settlement Date", "Amount", "Settlement Type"]
     missing = set(required) - set(df.columns)
     if missing:
         logger.error(f"Missing columns: {missing}")
@@ -176,18 +177,25 @@ def main():
     )
     save_output(forecast_df, detailed_file)
 
+    # Compute aggregate totals and include location
     totals_df = (
-        forecast_df.groupby("Terminal")["Predicted"]
-        .sum()
-        .reset_index(name="TotalPredicted")
+        forecast_df.groupby("Terminal")["Predicted"].sum().reset_index(name="TotalPredicted")
     )
+    # Map each terminal to its location
+    loc_map = df.groupby("Terminal")["Location"].first().reset_index()
+    totals_df = totals_df.merge(loc_map, on="Terminal")
+    # Format as USD string with 2 decimals
+    totals_df["TotalPredicted"] = totals_df["TotalPredicted"].apply(lambda x: f"${x:,.2f}")
+    # Reorder columns
+    totals_df = totals_df[["Terminal", "Location", "TotalPredicted"]]
+
     totals_file = args.input_file.with_name(
         f"{args.input_file.stem}_forecast_totals_{timestamp}.csv"
     )
     save_output(totals_df, totals_file)
 
     logger.info("Sample detailed forecast:\n" + forecast_df.head(10).to_string(index=False))
-    logger.info("Aggregate totals per terminal:\n" + totals_df.to_string(index=False))
+    logger.info("Aggregate totals per terminal with location:\n" + totals_df.to_string(index=False))
 
     elapsed = time.time() - start_time
     logger.info(f"Complete in {elapsed:.1f}s")
