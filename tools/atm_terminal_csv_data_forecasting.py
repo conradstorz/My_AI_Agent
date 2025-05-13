@@ -2,7 +2,8 @@
 terminal_forecast.py
 
 Advanced forecasting of future settlement trends per terminal
-using seasonal ARIMA (SARIMA). Enhanced data parsing, output to CSV and enriched logging.
+using seasonal ARIMA (SARIMA). Enhanced data parsing, produces both detailed per-day forecasts
+and aggregate total predictions per terminal.
 '''
 import argparse
 import sys
@@ -92,7 +93,7 @@ def prepare_daily_series(df: pd.DataFrame, terminal: str) -> pd.Series:
 
 
 def forecast_series(series: pd.Series, steps: int, order: tuple, seasonal_order: tuple) -> pd.DataFrame:
-    logger.debug(f"Fitting SARIMA{order}x{seasonal_order} for {series.name}")
+    logger.debug(f"Fitting SARIMA{order}x{seasonal_order} for terminal {series.name}")
     model = SARIMAX(
         series,
         order=order,
@@ -110,14 +111,13 @@ def forecast_series(series: pd.Series, steps: int, order: tuple, seasonal_order:
         "LowerCI": ci.iloc[:, 0].values,
         "UpperCI": ci.iloc[:, 1].values
     })
-    # Use .dt accessor to extract weekday name
     result["DayOfWeek"] = result["Date"].dt.day_name()
     return result
 
 
 def save_output(df: pd.DataFrame, output_path: Path):
     df.to_csv(output_path, index=False)
-    logger.info(f"Forecast results saved to {output_path}")
+    logger.info(f"Saved CSV: {output_path}")
 
 
 def main():
@@ -130,14 +130,14 @@ def main():
         sys.exit(1)
 
     terminals = df["Terminal"].dropna().unique()
-    logger.info(f"Starting forecast for {len(terminals)} terminals, {args.forecast_days} days ahead.")
+    logger.info(f"Forecasting {args.forecast_days} days ahead for {len(terminals)} terminals.")
 
-    all_fc = []
+    all_forecasts = []
     for term in terminals:
-        logger.info(f"Terminal: {term}")
+        logger.info(f"Processing terminal: {term}")
         series = prepare_daily_series(df, term)
         if series.sum() == 0:
-            logger.warning(f"No activity for {term}; skipping.")
+            logger.warning(f"No activity for {term}; skipping forecast.")
             continue
         try:
             fc = forecast_series(
@@ -147,25 +147,45 @@ def main():
                 tuple(args.seasonal_order)
             )
             fc["Terminal"] = term
-            all_fc.append(fc)
-            logger.info(f"Forecast done for {term}.")
+            all_forecasts.append(fc)
+            logger.info(f"Forecast complete for {term}.")
         except Exception:
             logger.exception(f"Forecast failed for {term}")
 
-    if not all_fc:
+    if not all_forecasts:
         logger.error("No forecasts generated. Exiting.")
         sys.exit(1)
 
-    forecast_df = pd.concat(all_fc, ignore_index=True)
-    output_file = args.input_file.with_name(
-        f"{args.input_file.stem}_forecast_{datetime.now():%Y%m%d%H%M%S}.csv"
+    forecast_df = pd.concat(all_forecasts, ignore_index=True)
+
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    # Detailed forecast CSV
+    detailed_file = args.input_file.with_name(
+        f"{args.input_file.stem}_forecast_{timestamp}.csv"
     )
-    save_output(forecast_df, output_file)
-    logger.info("Sample forecast:\n" + forecast_df.head(10).to_string(index=False))
+    save_output(forecast_df, detailed_file)
+
+    # Aggregate totals per terminal
+    totals_df = (
+        forecast_df.groupby("Terminal")["Predicted"]
+        .sum()
+        .reset_index(name="TotalPredicted")
+    )
+    totals_file = args.input_file.with_name(
+        f"{args.input_file.stem}_forecast_totals_{timestamp}.csv"
+    )
+    save_output(totals_df, totals_file)
+
+    # Log summaries
+    logger.info("Sample detailed forecast:\n" + forecast_df.head(10).to_string(index=False))
+    logger.info("Aggregate totals per terminal:\n" + totals_df.to_string(index=False))
 
     elapsed = time.time() - start_time
     logger.info(f"Complete in {elapsed:.1f}s")
-    print(f"Forecast CSV: {output_file}")
+
+    # Print output file paths
+    print(f"Detailed forecast CSV: {detailed_file}")
+    print(f"Totals forecast CSV: {totals_file}")
 
 if __name__ == "__main__":
     main()
