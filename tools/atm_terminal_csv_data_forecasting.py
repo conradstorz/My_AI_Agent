@@ -2,8 +2,8 @@
 terminal_forecast.py
 
 Advanced forecasting of future settlement trends per terminal
-using seasonal ARIMA (SARIMA). Enhanced data parsing, produces both detailed per-day forecasts
-and aggregate total predictions per terminal.
+using seasonal ARIMA (SARIMA). Enhanced data parsing, filters only 'Transaction' settlement types,
+produces both detailed per-day forecasts and aggregate total predictions per terminal.
 '''
 import argparse
 import sys
@@ -60,25 +60,37 @@ def parse_args():
 
 
 def load_data(csv_path: Path) -> pd.DataFrame:
+    """
+    Load, validate, and clean CSV data. Only keeps rows where
+    Settlement Type == 'Transaction'.
+    """
     logger.info(f"Loading data from {csv_path}")
     if not csv_path.exists():
         logger.error(f"File not found: {csv_path}")
         raise FileNotFoundError(f"File not found: {csv_path}")
     df = pd.read_csv(csv_path)
-    required = ["Terminal", "Settlement Date", "Amount"]
+
+    required = ["Terminal", "Settlement Date", "Amount", "Settlement Type"]
     missing = set(required) - set(df.columns)
     if missing:
         logger.error(f"Missing columns: {missing}")
         raise ValueError(f"Missing columns: {missing}")
-    # Parse dates
+
+    # Parse and clean
     df["Settlement Date"] = pd.to_datetime(df["Settlement Date"], errors="coerce")
-    # Clean currency values
     df["Amount"] = (
         df["Amount"].astype(str)
         .replace(r"[^0-9.\-]", "", regex=True)
         .replace("", "0")
         .astype(float)
     )
+
+    # Filter only transactions
+    original_count = len(df)
+    df = df[df["Settlement Type"] == "Transaction"].copy()
+    filtered_count = len(df)
+    logger.info(f"Filtered settlement types: removed {original_count - filtered_count} rows; {filtered_count} 'Transaction' remain.")
+
     return df
 
 
@@ -159,13 +171,11 @@ def main():
     forecast_df = pd.concat(all_forecasts, ignore_index=True)
 
     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-    # Detailed forecast CSV
     detailed_file = args.input_file.with_name(
         f"{args.input_file.stem}_forecast_{timestamp}.csv"
     )
     save_output(forecast_df, detailed_file)
 
-    # Aggregate totals per terminal
     totals_df = (
         forecast_df.groupby("Terminal")["Predicted"]
         .sum()
@@ -176,14 +186,12 @@ def main():
     )
     save_output(totals_df, totals_file)
 
-    # Log summaries
     logger.info("Sample detailed forecast:\n" + forecast_df.head(10).to_string(index=False))
     logger.info("Aggregate totals per terminal:\n" + totals_df.to_string(index=False))
 
     elapsed = time.time() - start_time
     logger.info(f"Complete in {elapsed:.1f}s")
 
-    # Print output file paths
     print(f"Detailed forecast CSV: {detailed_file}")
     print(f"Totals forecast CSV: {totals_file}")
 
