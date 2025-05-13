@@ -2,7 +2,7 @@
 terminal_forecast.py
 
 Advanced forecasting of future settlement trends per terminal
-using seasonal ARIMA (SARIMA).
+using seasonal ARIMA (SARIMA). Enhanced data parsing for currency fields.
 '''
 import argparse
 import sys
@@ -65,22 +65,28 @@ def parse_args():
 
 def load_data(csv_path: Path) -> pd.DataFrame:
     """
-    Load and validate CSV data, parsing dates and amounts.
+    Load and validate CSV data, parsing dates and cleaning 'Amount' currency values.
     """
     logger.info(f"Loading data from {csv_path}")
     if not csv_path.exists():
         logger.error(f"File not found: {csv_path}")
         raise FileNotFoundError(f"File not found: {csv_path}")
     df = pd.read_csv(csv_path)
-    required = [
-        "Terminal", "Settlement Date", "Amount"
-    ]
+    # Required columns
+    required = ["Terminal", "Settlement Date", "Amount"]
     missing = set(required) - set(df.columns)
     if missing:
         logger.error(f"Missing columns: {missing}")
         raise ValueError(f"Missing columns: {missing}")
+    # Parse dates
     df["Settlement Date"] = pd.to_datetime(df["Settlement Date"], errors="coerce")
-    df["Amount"] = pd.to_numeric(df["Amount"], errors="coerce").fillna(0)
+    # Clean currency values: remove any non-numeric except dot and minus
+    df["Amount"] = (
+        df["Amount"].astype(str)
+        .replace(r"[^0-9.\-]", "", regex=True)
+        .replace("", "0")
+        .astype(float)
+    )
     return df
 
 
@@ -90,13 +96,13 @@ def prepare_daily_series(df: pd.DataFrame, terminal: str) -> pd.Series:
 
     :param df: DataFrame with settlement data
     :param terminal: Terminal identifier
-    :returns: pd.Series indexed by date of daily sums
+    :returns: pd.Series indexed by daily date of sums
     """
+    # Resample on daily frequency
     daily = (
         df[df["Terminal"] == terminal]
-        .groupby(df["Settlement Date"].dt.normalize())["Amount"]
+        .resample('D', on='Settlement Date')["Amount"]
         .sum()
-        .asfreq('D')
         .fillna(0)
     )
     return daily
@@ -117,7 +123,7 @@ def forecast_series(
     :param seasonal_order: Seasonal order (P, D, Q, s)
     :returns: DataFrame with Date, Predicted, LowerCI, UpperCI, DayOfWeek
     """
-    logger.debug(f"Fitting SARIMA{order}x{seasonal_order} on series length {len(series)}")
+    logger.debug(f"Fitting SARIMA{order}x{seasonal_order} on series from {series.index.min().date()} to {series.index.max().date()}")
     model = SARIMAX(
         series,
         order=order,
@@ -154,8 +160,9 @@ def main():
     for term in terminals:
         logger.info(f"Processing terminal: {term}")
         series = prepare_daily_series(df, term)
-        if series.dropna().sum() == 0:
-            logger.warning(f"No activity for {term}; skipping.")
+        # Skip only if no historical non-zero volume
+        if series.sum() == 0:
+            logger.warning(f"Terminal {term} has no historical activity; skipping forecast.")
             continue
         fc = forecast_series(
             series,
@@ -167,10 +174,11 @@ def main():
         all_forecasts.append(fc)
 
     if not all_forecasts:
-        logger.error("No forecasts generated.")
+        logger.error("No forecasts generated. Check data parsing.")
         sys.exit(1)
 
     forecast_df = pd.concat(all_forecasts, ignore_index=True)
+    # Output
     print(forecast_df.to_string(index=False))
 
 if __name__ == "__main__":
