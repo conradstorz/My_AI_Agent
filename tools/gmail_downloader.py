@@ -235,11 +235,8 @@ def download_attachments(service, history):
                     "original_name": filename,
                 })
 
-            # Only mark as processed if we actually pulled something
-            if downloaded_this_msg:
-                history["message_ids"].add(msg_id)
-            else:
-                logger.debug(f"No new attachments in message {msg_id}; will revisit later.")
+            # **Always** mark this message as seen, attachment or not
+            history["message_ids"].add(msg_id)
 
         # pagination?
         page_token = response.get("nextPageToken")
