@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Process downloaded data based on user directives in categorization_memory.json.
+Process downloaded data based on user directives in categorization_memory.json
 Breaks the workflow into discrete functions for clarity and testability.
 """
 import json
