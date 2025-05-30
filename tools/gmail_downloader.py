@@ -170,7 +170,9 @@ def hash_bytes(data):
 
 def download_attachments(service, history):
     logger.info("Checking Gmail for new unread messages with attachments…")
-    response = service.users().messages().list(userId="me", q="has:attachment is:unread").execute()
+    response = service.users().messages().list(
+        userId="me", q="has:attachment is:unread"
+    ).execute()
     messages = response.get("messages", [])
     logger.info(f"Found {len(messages)} message(s) matching query.")
 
@@ -181,43 +183,56 @@ def download_attachments(service, history):
             logger.debug(f"Skipping already-processed message: {msg_id}")
             continue
 
-        message = service.users().messages().get(userId="me", id=msg_id, format="full").execute()
-        # …extract headers…
+        # Fetch full message and extract headers
+        message = service.users().messages().get(
+            userId="me", id=msg_id, format="full"
+        ).execute()
 
+        # --- NEW: parse Subject and From headers ---
+        headers = message.get("payload", {}).get("headers", [])
+        subject = next((h["value"] for h in headers if h["name"] == "Subject"), "(no subject)")
+        sender  = next((h["value"] for h in headers if h["name"] == "From"), "(no sender)")
+        # -------------------------------------------
+
+        downloaded_this_msg = 0
         for part in message.get("payload", {}).get("parts", []):
             filename = part.get("filename")
-            if not filename or "attachmentId" not in part.get("body", {}):
+            body     = part.get("body", {})
+            if not filename or "attachmentId" not in body:
                 continue
 
             attachment = service.users().messages().attachments().get(
-                userId="me", messageId=msg_id, id=part["body"]["attachmentId"]
+                userId="me",
+                messageId=msg_id,
+                id=body["attachmentId"]
             ).execute()
             raw_data = base64.urlsafe_b64decode(attachment.get("data", ""))
-            
-            # *** Deduplicate by file-hash only ***
             file_hash = hash_bytes(raw_data)
+
             if file_hash in history["attachments"]:
                 logger.debug(f"  Duplicate attachment (hash {file_hash}), skipping {filename}")
                 continue
 
-            # save the file…
-            filename_hashed = f"{file_hash}_{filename}"
-            save_path = DOWNLOAD_DIR / filename_hashed
+            save_name = f"{file_hash}_{filename}"
+            save_path = DOWNLOAD_DIR / save_name
             save_path.parent.mkdir(parents=True, exist_ok=True)
             save_path.write_bytes(raw_data)
             logger.info(f"  Attachment saved to: {save_path}")
 
+            history["attachments"].add(file_hash)
+            downloaded_this_msg += 1
+
             new_files.append({
-                "filename":      filename_hashed,
+                "filename":      save_name,
                 "subject":       subject,
                 "sender":        sender,
                 "original_name": filename,
             })
-            # record only the hash
-            history["attachments"].add(file_hash)
 
-        # mark message processed once all its parts are handled
-        history["message_ids"].add(msg_id)
+        if downloaded_this_msg:
+            history["message_ids"].add(msg_id)
+        else:
+            logger.debug(f"No new attachments for message {msg_id}; will retry next run.")
 
     logger.info(f"Total new attachments downloaded: {len(new_files)}")
     return new_files
