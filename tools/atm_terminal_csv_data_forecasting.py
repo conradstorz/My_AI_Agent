@@ -2,15 +2,13 @@
 terminal_forecast.py
 
 Advanced forecasting of future settlement trends per terminal
-using seasonal ARIMA (SARIMA). Enhanced data parsing, filters only 'Transaction' settlement types,
-produces detailed per-day forecasts and aggregate total predictions per terminal, including location and
-USD-formatted totals.
+using seasonal ARIMA (SARIMA) with a fallback to day-of-week mean on sparse data.
 '''
 import argparse
 import sys
 import time
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, date, timedelta
 
 import pandas as pd
 from loguru import logger
@@ -28,7 +26,7 @@ logger.add(LOG_DIR / "terminal_forecast.log", level="DEBUG", rotation="1 day", r
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Forecast future settlement amounts per terminal using SARIMA."
+        description="Forecast future settlement amounts per terminal using SARIMA with fallback."
     )
     parser.add_argument(
         "input_file",
@@ -128,6 +126,37 @@ def forecast_series(series: pd.Series, steps: int, order: tuple, seasonal_order:
     return result
 
 
+def simple_dow_forecast(df: pd.DataFrame, terminal: str, steps: int) -> pd.DataFrame:
+    """
+    Simple fallback: forecast next `steps` days using historical day-of-week averages.
+    """
+    # Build daily totals
+    hist = (
+        df[df["Terminal"] == terminal]
+        .groupby(df["Settlement Date"].dt.normalize())["Amount"]
+        .sum()
+        .reset_index(name="DailyTotal")
+    )
+    hist["DayOfWeek"] = hist["Settlement Date"].dt.day_name()
+    dow_avg = hist.groupby("DayOfWeek")["DailyTotal"].mean().to_dict()
+    overall_avg = hist["DailyTotal"].mean()
+
+    today = date.today()
+    rows = []
+    for i in range(1, steps + 1):
+        d = today + timedelta(days=i)
+        dow = d.strftime("%A")
+        amt = dow_avg.get(dow, overall_avg)
+        rows.append({
+            "Date": pd.to_datetime(d),
+            "Predicted": amt,
+            "LowerCI": amt,
+            "UpperCI": amt,
+            "DayOfWeek": dow
+        })
+    return pd.DataFrame(rows)
+
+
 def save_output(df: pd.DataFrame, output_path: Path):
     df.to_csv(output_path, index=False)
     logger.info(f"Saved CSV: {output_path}")
@@ -149,21 +178,25 @@ def main():
     for term in terminals:
         logger.info(f"Processing terminal: {term}")
         series = prepare_daily_series(df, term)
-        if series.sum() == 0:
-            logger.warning(f"No activity for {term}; skipping forecast.")
-            continue
-        try:
-            fc = forecast_series(
-                series,
-                args.forecast_days,
-                tuple(args.order),
-                tuple(args.seasonal_order)
-            )
-            fc["Terminal"] = term
-            all_forecasts.append(fc)
-            logger.info(f"Forecast complete for {term}.")
-        except Exception:
-            logger.exception(f"Forecast failed for {term}")
+        nonzero_days = (series > 0).sum()
+        seasonal_period = args.seasonal_order[3]
+        if nonzero_days < 2 * seasonal_period:
+            logger.warning(f"Not enough non-zero history ({nonzero_days} days) for {term}; using day-of-week average fallback.")
+            fc = simple_dow_forecast(df, term, args.forecast_days)
+        else:
+            try:
+                fc = forecast_series(
+                    series,
+                    args.forecast_days,
+                    tuple(args.order),
+                    tuple(args.seasonal_order)
+                )
+            except Exception:
+                logger.exception(f"SARIMA failed for {term}; using fallback.")
+                fc = simple_dow_forecast(df, term, args.forecast_days)
+        fc["Terminal"] = term
+        all_forecasts.append(fc)
+        logger.info(f"Forecast complete for {term}.")
 
     if not all_forecasts:
         logger.error("No forecasts generated. Exiting.")
@@ -181,12 +214,9 @@ def main():
     totals_df = (
         forecast_df.groupby("Terminal")["Predicted"].sum().reset_index(name="TotalPredicted")
     )
-    # Map each terminal to its location
     loc_map = df.groupby("Terminal")["Location"].first().reset_index()
     totals_df = totals_df.merge(loc_map, on="Terminal")
-    # Format as USD string with 2 decimals
     totals_df["TotalPredicted"] = totals_df["TotalPredicted"].apply(lambda x: f"${x:,.2f}")
-    # Reorder columns
     totals_df = totals_df[["Terminal", "Location", "TotalPredicted"]]
 
     totals_file = args.input_file.with_name(
