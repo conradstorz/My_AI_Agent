@@ -29,6 +29,7 @@ from dotenv import load_dotenv  # Load .env files
 from google.auth.transport.requests import Request  # Refresh OAuth tokens
 from google_auth_oauthlib.flow import InstalledAppFlow  # OAuth2 flow
 from googleapiclient.discovery import build  # Gmail API client builder
+from google.auth.exceptions import RefreshError  # Handle token refresh errors
 
 # Load environment variables from a .env file, overriding existing environment values
 load_dotenv(override=True)
@@ -94,11 +95,17 @@ def authenticate():
 
     # If no valid credentials or expired, refresh or run the flow
     if not creds or not creds.valid:
-        # If expired but refresh token available, refresh silently
+        # If expired but refresh token available, try to refresh
         if creds and creds.expired and creds.refresh_token:
-            logger.info("Refreshing expired credentials...")
-            creds.refresh(Request())
-        else:
+            try:
+                logger.info("Refreshing expired credentials...")
+                creds.refresh(Request())
+            except RefreshError:
+                logger.warning("Token expired or revoked: deleting token.json to re-authenticate.")
+                TOKEN_FILE.unlink(missing_ok=True)
+                creds = None
+        # If we still don't have usable creds, run the full OAuth flow
+        if not creds:
             # Launch local server for user to authorize the app
             logger.info("Launching OAuth2 flow for Gmail API...")
             flow = InstalledAppFlow.from_client_secrets_file(
@@ -117,16 +124,16 @@ def authenticate():
 def load_history():
     """
     Load processing history of message IDs and attachment hashes.
-
-    :return: History dict containing sets of processed IDs and hashes.
-    :rtype: dict
+    Always returns sets for deduplication logic.
     """
-    # If history file exists, parse and return it
+    history = {"message_ids": set(), "attachments": set()}
     if HISTORY_FILE.exists():
         with HISTORY_FILE.open("r") as f:
-            return json.load(f)
-    # Otherwise start fresh
-    return {"message_ids": set(), "attachments": set()}
+            data = json.load(f)
+        # Convert loaded lists into sets
+        history["message_ids"]  = set(data.get("message_ids", []))
+        history["attachments"]   = set(data.get("attachments", []))
+    return history
 
 
 def save_history(history):
@@ -162,94 +169,58 @@ def hash_bytes(data):
 
 
 def download_attachments(service, history):
-    """
-    Search for unread messages with attachments, download them, and update history.
-
-    :param service: Authenticated Gmail API service instance.
-    :type service: googleapiclient.discovery.Resource
-    :param history: Tracking dict for processed items.
-    :type history: dict
-    :return: List of metadata dicts for each new download.
-    :rtype: list
-    """
-    logger.info("Checking Gmail for new unread messages with attachments...")
-    # Query unread messages that have attachments
-    query = "has:attachment is:unread"
-    response = service.users().messages().list(userId="me", q=query).execute()
+    logger.info("Checking Gmail for new unread messages with attachments…")
+    response = service.users().messages().list(userId="me", q="has:attachment is:unread").execute()
     messages = response.get("messages", [])
     logger.info(f"Found {len(messages)} message(s) matching query.")
 
-    new_files = []  # Collect metadata for this run
-
+    new_files = []
     for msg in messages:
-        msg_id = msg.get("id")  # Unique Gmail message identifier
-        # Skip messages already processed
+        msg_id = msg["id"]
         if msg_id in history["message_ids"]:
             logger.debug(f"Skipping already-processed message: {msg_id}")
             continue
 
-        # Fetch the full message payload for headers and parts
-        message = service.users().messages().get(
-            userId="me", id=msg_id, format="full").execute()
-        headers = message.get("payload", {}).get("headers", [])
-        # Extract subject and sender from headers
-        subject = next((h["value"] for h in headers if h["name"].lower() == "subject"), "(no subject)")
-        sender = next((h["value"] for h in headers if h["name"].lower() == "from"), "(no sender)")
+        message = service.users().messages().get(userId="me", id=msg_id, format="full").execute()
+        # …extract headers…
 
-        logger.info(f"Processing message {msg_id}")
-        logger.debug(f"  Subject: {subject}")
-        logger.debug(f"  From:    {sender}")
-
-        # Iterate over all MIME parts looking for attachments
         for part in message.get("payload", {}).get("parts", []):
             filename = part.get("filename")
-            body = part.get("body", {})
-            # If part has a filename and an attachmentId, it's an attachment
-            if filename and "attachmentId" in body:
-                attachment_id = body.get("attachmentId")
-                logger.debug(f"  Found attachment part: {filename} (ID: {attachment_id})")
+            if not filename or "attachmentId" not in part.get("body", {}):
+                continue
 
-                # Download the attachment data
-                attachment = service.users().messages().attachments().get(
-                    userId="me", messageId=msg_id, id=attachment_id).execute()
+            attachment = service.users().messages().attachments().get(
+                userId="me", messageId=msg_id, id=part["body"]["attachmentId"]
+            ).execute()
+            raw_data = base64.urlsafe_b64decode(attachment.get("data", ""))
+            
+            # *** Deduplicate by file-hash only ***
+            file_hash = hash_bytes(raw_data)
+            if file_hash in history["attachments"]:
+                logger.debug(f"  Duplicate attachment (hash {file_hash}), skipping {filename}")
+                continue
 
-                # Decode from base64url
-                raw_data = base64.urlsafe_b64decode(attachment.get("data", ""))
-                # Compute a unique hash for deduplication
-                file_hash = hash_bytes(raw_data)
-                hash_key = f"{msg_id}:{file_hash}"
+            # save the file…
+            filename_hashed = f"{file_hash}_{filename}"
+            save_path = DOWNLOAD_DIR / filename_hashed
+            save_path.parent.mkdir(parents=True, exist_ok=True)
+            save_path.write_bytes(raw_data)
+            logger.info(f"  Attachment saved to: {save_path}")
 
-                # Skip duplicates based on history
-                if hash_key in history["attachments"]:
-                    logger.debug(f"  Duplicate attachment detected, skipping: {filename}")
-                    continue
+            new_files.append({
+                "filename":      filename_hashed,
+                "subject":       subject,
+                "sender":        sender,
+                "original_name": filename,
+            })
+            # record only the hash
+            history["attachments"].add(file_hash)
 
-                # Construct a safe, hashed filename
-                filename_hashed = f"{file_hash}_{filename}"
-                save_path = DOWNLOAD_DIR / filename_hashed
-                # Ensure download directory exists
-                save_path.parent.mkdir(parents=True, exist_ok=True)
-                # Write binary data to file
-                with open(save_path, "wb") as out_fp:
-                    out_fp.write(raw_data)
-                logger.info(f"  Attachment saved to: {save_path}")
-
-                # Record metadata for result output
-                new_files.append({
-                    "filename": filename_hashed,
-                    "subject": subject,
-                    "sender": sender,
-                    "original_name": filename,
-                })
-                # Mark this attachment as processed
-                history["attachments"].add(hash_key)
-
-        # After processing attachments, mark message as processed
+        # mark message processed once all its parts are handled
         history["message_ids"].add(msg_id)
 
     logger.info(f"Total new attachments downloaded: {len(new_files)}")
     return new_files
-
 
 def write_result(downloaded_info):
     """
@@ -294,21 +265,14 @@ def main():
         logger.error(f"Authentication failed: {e}")
         return  # Exit if credentials are missing
 
-    # Load or initialize history structure
+    # Load or initialize history (now already in sets)
     history = load_history()
-    # Convert serialized lists back into sets for deduplication logic
-    history["message_ids"] = set(history.get("message_ids", []))
-    history["attachments"] = set(history.get("attachments", []))
 
     try:
-        # Perform attachment downloads and get metadata
         downloaded_info = download_attachments(service, history)
-        # Record this run's results
         write_result(downloaded_info)
     finally:
-        # Always save history, even if download or write fails
         save_history(history)
-
 
 if __name__ == "__main__":
     main()
