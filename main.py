@@ -6,22 +6,30 @@ from loguru import logger
 from agent import agent_loop
 from dotenv import dotenv_values, load_dotenv
 import sys
-
+from constants import (HEARTBEAT_FILE,
+                       HEARTBEAT_INTERVAL, 
+                       HEARTBEAT_DIR,
+                       AGENT_NAME, 
+                       LOGS_DIR, 
+                       MAIN_LOG_FILE, 
+                       MAIN_LOG_ROTATION
+)
 load_dotenv() 
 
 from utils.startup_checks import run_startup_diagnostics
 
 # Where to store agent heartbeat info
-HEARTBEAT_FILE = Path("heartbeat/agent.status.json")
-HEARTBEAT_INTERVAL = 60  # seconds
+# HEARTBEAT_FILE = Path("heartbeat/agent.status.json")
+# HEARTBEAT_INTERVAL = 60  # seconds
 
 def heartbeat():
-    Path("heartbeat").mkdir(exist_ok=True)
+    # Path("heartbeat").mkdir(exist_ok=True)
+    HEARTBEAT_DIR.mkdir(exist_ok=True)
     while True:
         status = {
             "timestamp": time.time(),
             "status": "alive",
-            "agent": "basic-agent",
+            "agent": AGENT_NAME,
         }
         with HEARTBEAT_FILE.open("w") as f:
             json.dump(status, f, indent=2)
@@ -30,9 +38,9 @@ def heartbeat():
 
 
 def main():
-    LOGS_DIR = Path("logs")
+    # LOGS_DIR = Path("logs")
     LOGS_DIR.mkdir(exist_ok=True)
-    logger.add(LOGS_DIR / "main.log", rotation="1 week")
+    logger.add(MAIN_LOG_FILE, rotation=MAIN_LOG_ROTATION)
 
     # This is an attempt to log any uncaught exceptions suggested by ChatGPT
     # https://stackoverflow.com/questions/18070767/logging-uncaught-exceptions-in-python

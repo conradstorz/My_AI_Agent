@@ -7,30 +7,42 @@ import json
 import subprocess
 from pathlib import Path
 from loguru import logger
-
+from constants import (
+    LOGS_DIR,
+    PROCESS_DOWNLOADS_LOG_FILE,
+    PROCESS_DOWNLOADS_LOG_ROTATION,
+    MEMORY_FILE,
+    UNHANDLED_FILE,
+    PRINT_TOOL_PATH,
+    AGENT_ROOT,
+    AGENT_DOWNLOADS_DIR,
+    AGENT_ARCHIVE_DIR,      
+    AGENT_TOOLS_DIR,    
+    AGENT_LOGS_DIR
+)
 # --- Configuration Constants ---
-LOG_FILENAME = "process_downloads.log"
-MEMORY_FILENAME = "categorization_memory.json"
-UNHANDLED_FILENAME = "unhandled_filedata.json"
-PRINT_TOOL_SCRIPT = "print_tool.py"
+# LOG_FILENAME = "process_downloads.log"
+# MEMORY_FILENAME = "categorization_memory.json"
+# UNHANDLED_FILENAME = "unhandled_filedata.json"
+# PRINT_TOOL_SCRIPT = "print_tool.py"
 
 
 def configure_paths():
     """
     Resolve and return all key directories and file paths as a dict.
     """
-    base_dir = Path(__file__).resolve().parent
-    agent_root = base_dir.parent
+    # base_dir = Path(__file__).resolve().parent
+    # agent_root = base_dir.parent
 
     paths = {
-        "agent_root": agent_root,
-        "downloads_dir": agent_root / "downloads",
-        "archive_dir":  agent_root / "archive",
-        "tools_dir":    agent_root / "tools",
-        "logs_dir":     agent_root / "logs",
-        "mem_path":     agent_root / "tools" / MEMORY_FILENAME,
-        "unhandled_path": agent_root / UNHANDLED_FILENAME,
-        "print_tool":   agent_root / PRINT_TOOL_SCRIPT,
+        "agent_root":     AGENT_ROOT,
+        "downloads_dir":  AGENT_DOWNLOADS_DIR,
+        "archive_dir":    AGENT_ARCHIVE_DIR,
+        "tools_dir":      AGENT_TOOLS_DIR,
+        "logs_dir":       AGENT_LOGS_DIR,
+        "mem_path":       MEMORY_FILE,
+        "unhandled_path": UNHANDLED_FILE,
+        "print_tool":     PRINT_TOOL_PATH,
     }
     return paths
 
@@ -39,9 +51,13 @@ def setup_logging(logs_dir: Path):
     """
     Configure Loguru to write to a rotating log file under logs_dir.
     """
-    logs_dir.mkdir(exist_ok=True)
-    logger.add(logs_dir / LOG_FILENAME, rotation="1 week")
-    logger.info("Logging configured: {}", logs_dir / LOG_FILENAME)
+    LOGS_DIR.mkdir(parents=True, exist_ok=True)
+    logger.add(
+        PROCESS_DOWNLOADS_LOG_FILE,
+        rotation=PROCESS_DOWNLOADS_LOG_ROTATION,
+        level="INFO"
+    )
+    logger.info(f"Logging configured: {PROCESS_DOWNLOADS_LOG_FILE}")
 
 
 def load_json(path: Path, default=None):
@@ -120,13 +136,13 @@ def summarize(stats: dict):
     Log a summary of the processing run.
     """
     logger.info("----- ProcessDownloadedData Summary -----")
-    logger.info("Total entries:            {}", stats.get("total_entries"))
-    logger.info("Entries to print:         {}", stats.get("to_print_entries"))
-    logger.info("Entries skipped:          {}", stats.get("skipped_entries"))
-    logger.info("Files found:              {}", stats.get("files_found"))
-    logger.info("Files printed:            {}", stats.get("files_printed"))
-    logger.info("Files archived:           {}", stats.get("archived"))
-    logger.info("Errors encountered:       {}", stats.get("errors"))
+    logger.info(f"Total entries:            {stats.get('total_entries')}")
+    logger.info(f"Entries to print:         {stats.get('to_print_entries')}")
+    logger.info(f"Entries skipped:          {stats.get('skipped_entries')}")
+    logger.info(f"Files found:              {stats.get('files_found')}")
+    logger.info(f"Files printed:            {stats.get('files_printed')}")
+    logger.info(f"Files archived:           {stats.get('archived')}")
+    logger.info(f"Errors encountered:       {stats.get('errors')}")
     logger.info("---------------------------------------")
 
 

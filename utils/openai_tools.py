@@ -5,6 +5,11 @@ import json
 from loguru import logger
 from openai import OpenAI
 from dotenv import load_dotenv
+from constants import (
+    OPENAI_MODEL,
+    OPENAI_TEMPERATURE,
+    SYSTEM_PROMPT_CONTENT,
+)
 
 load_dotenv(override=True)
 client = OpenAI()
@@ -20,15 +25,7 @@ def summarize_document(text: str, filename: str) -> dict:
     """
     system = {
         "role": "system",
-        "content": (
-            "You are a document-processing assistant. "
-            "When given text, you will output exactly one JSON object "
-            "and nothing else—no bullet points, no introductory text, "
-            "no code fences. The JSON MUST have these three fields:\n"
-            "  • summary (a concise prose summary)\n"
-            "  • contains_structured_data (true or false)\n"
-            "  • notes (any caveats or observations)\n"
-        )
+        "content": SYSTEM_PROMPT_CONTENT
     }
     user = {
         "role": "user",
@@ -43,9 +40,9 @@ def summarize_document(text: str, filename: str) -> dict:
     }
 
     resp = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model=OPENAI_MODEL,
         messages=[system, user],
-        temperature=0,
+        temperature=OPENAI_TEMPERATURE
     )
     raw = resp.choices[0].message.content.strip()
     # Optionally log raw for future debugging:

@@ -11,15 +11,27 @@ from dotenv import load_dotenv
 import fitz  # PyMuPDF
 import pandas as pd
 from utils.openai_tools import summarize_document
+from constants import (
+    DOWNLOADS_DIR,
+    ANALYSIS_DIR,
+    RESULTS_DIR,
+    FILE_ANALYZER_CONTEXT,
+    MEMORY_FILE,
+    UNHANDLED_FILE,
+    LOGS_DIR,
+    FILE_ANALYZER_LOG_FILE,
+    FILE_ANALYZER_LOG_ROTATION,
+    FILE_ANALYZER_LOG_RETENTION,
+)
 
 # Global paths and state files
-BASE_DIR = Path(__file__).resolve().parent
-DOWNLOADS_DIR = BASE_DIR / "downloads"
-ANALYSIS_DIR = BASE_DIR / "analysis"
-RESULTS_DIR = BASE_DIR / "results"
-LOGS_DIR = BASE_DIR / "logs"
-MEMORY_FILE = BASE_DIR / "categorization_memory.json"
-UNHANDLED_FILE = BASE_DIR / "unhandled_filedata.json"
+# BASE_DIR = Path(__file__).resolve().parent
+# DOWNLOADS_DIR = BASE_DIR / "downloads"
+# ANALYSIS_DIR = BASE_DIR / "analysis"
+# RESULTS_DIR = BASE_DIR / "results"
+# LOGS_DIR = BASE_DIR / "logs"
+# MEMORY_FILE = BASE_DIR / "categorization_memory.json"
+# UNHANDLED_FILE = BASE_DIR / "unhandled_filedata.json"
 
 # In-memory state
 memory = {}
@@ -35,8 +47,13 @@ def ensure_directories():
 
 def configure_logging():
     """Configure Loguru to write to a rotating log file."""
-    log_path = LOGS_DIR / "file_analyzer.log"
-    logger.add(log_path, rotation="1 week", retention="4 weeks", level="DEBUG")
+    LOGS_DIR.mkdir(parents=True, exist_ok=True)
+    logger.add(
+        FILE_ANALYZER_LOG_FILE,
+        rotation=FILE_ANALYZER_LOG_ROTATION,
+        retention=FILE_ANALYZER_LOG_RETENTION,
+        level="DEBUG"
+    )
 
 
 def load_json(path: Path, default):
@@ -59,7 +76,7 @@ def save_json(data, path: Path):
 
 def load_context() -> dict:
     """Load file metadata from gmail_downloader.json."""
-    path = RESULTS_DIR / "gmail_downloader.json"
+    path = FILE_ANALYZER_CONTEXT
     if not path.exists():
         logger.warning("No gmail_downloader.json found.")
         return {}

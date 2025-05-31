@@ -1,0 +1,578 @@
+**Centralized Constants Management**
+
+**Objective**: Gather all magic numbers, string literals, API endpoints, directory paths, query parameters, and other constants into a single module or configuration file, improving maintainability and clarity.
+
+---
+
+## 1. Identify & Categorize Constants
+
+1. **Paths & Directories**: download locations, history file paths, result directories, token file path.
+2. **Gmail Queries & Labels**: search queries (`"has:attachment"`), label IDs (`"UNREAD"`).
+3. **Network/API Settings**: OAuth scopes, endpoint URLs, timeouts.
+4. **Hashes & Encoding**: encoding settings, hash algorithm names.
+5. **Logging Configuration**: log format strings, sink file names, rotation policies.
+6. **Paging & Limits**: `maxResults` for Gmail listing, page size.
+7. **File Naming Schemes**: prefix formats, timestamp formats.
+
+---
+
+## 2. Proposed Structure
+
+* `(or`) at project root:
+
+  ```python
+  # constants.py
+  from pathlib import Path
+
+  # Path constants
+  ROOT_DIR         = Path(__file__).parent
+  DOWNLOAD_DIR     = ROOT_DIR / "downloads"
+  HISTORY_FILE     = ROOT_DIR / "downloaded_attachments.json"
+  RESULTS_FILE     = ROOT_DIR / "results" / "gmail_downloader.json"
+  TOKEN_FILE       = ROOT_DIR / "tools" / "token.json"
+
+  # Gmail queries & labels
+  GMAIL_ATTACHMENT_QUERY = "has:attachment"
+  GMAIL_UNREAD_LABEL     = "UNREAD"
+  MAX_PAGE_SIZE          = 100
+
+  # API settings
+  GMAIL_SCOPES        = [
+      "https://www.googleapis.com/auth/gmail.readonly",
+  ]
+  API_TIMEOUT_SECONDS = 30
+
+  # Logging
+  LOG_ROTATION        = "00:00"
+  LOG_RETENTION_DAYS  = 7
+
+  # Misc
+  HASH_ALGORITHM      = "sha256"
+  FILENAME_FORMAT     = "{hash}_{original_name}"
+  ```
+
+* **Usage**: everywhere in code, replace in-line constants with imports from `constants.py`:
+
+  ```python
+  from constants import DOWNLOAD_DIR, HISTORY_FILE, GMAIL_ATTACHMENT_QUERY
+  ```
+
+---
+
+## 3. Environment Overrides (Optional)
+
+* For values that may differ per deployment (e.g., token path, log retention), consider using environment variables or a `.env` file with \[pydantic BaseSettings] to override defaults.
+
+---
+
+## 3. Constants in `main.py`
+
+The following in-file constants in \`\` should be centralized:
+
+* **Heartbeat settings**
+
+  * `HEARTBEAT_FILE = Path("heartbeat/agent.status.json")`
+  * `HEARTBEAT_INTERVAL = 60`  # seconds
+* **Agent metadata**
+
+  * Agent identifier string: `"basic-agent"`
+* **Logging settings**
+
+  * `LOGS_DIR = Path("logs")`
+  * Log filename: `"main.log"`
+  * Rotation policy: `"1 week"`
+
+### Proposed additions to `constants.py`
+
+```python
+# main.py constants
+HEARTBEAT_DIR       = ROOT_DIR / "heartbeat"
+HEARTBEAT_FILE      = HEARTBEAT_DIR / "agent.status.json"
+HEARTBEAT_INTERVAL  = 60  # seconds
+
+AGENT_NAME          = "basic-agent"
+
+LOGS_DIR            = ROOT_DIR / "logs"
+MAIN_LOG_FILE       = LOGS_DIR / "main.log"
+MAIN_LOG_ROTATION   = "1 week"
+```
+
+### Refactoring `main.py`
+
+1. **Import** these constants at the top of `main.py`:
+
+   ```python
+   from constants import (
+       HEARTBEAT_DIR,
+       HEARTBEAT_FILE,
+       HEARTBEAT_INTERVAL,
+       AGENT_NAME,
+       LOGS_DIR,
+       MAIN_LOG_FILE,
+       MAIN_LOG_ROTATION,
+   )
+   ```
+
+2. **Replace** in-file definitions and usage:
+
+   ```python
+   def heartbeat():
+       HEARTBEAT_DIR.mkdir(exist_ok=True)
+       while True:
+           status = {
+               "timestamp": time.time(),
+               "status": "alive",
+               "agent": AGENT_NAME,
+           }
+           with HEARTBEAT_FILE.open("w") as f:
+               json.dump(status, f, indent=2)
+           logger.debug("Heartbeat written.")
+           time.sleep(HEARTBEAT_INTERVAL)
+
+   def main():
+       LOGS_DIR.mkdir(exist_ok=True)
+       logger.add(MAIN_LOG_FILE, rotation=MAIN_LOG_ROTATION)
+       # ... rest of setup ...
+   ```
+
+## 4. Constants in `agent.py`
+
+The following in-file constants in \`\` should be centralized:
+
+* **Loop timing**
+
+  * `LOOP_DELAY = 300`  # seconds between cycles
+* **Log directory and files**
+
+  * `LOGS_DIR = Path(__file__).parent / "logs"`
+  * Log filename/rotation passed to `logger.add`:
+
+    * filename: `"agent.log"`
+    * rotation: `"1 week"`
+* **Tool invocations**
+
+  * The hard-coded list of modules and labels in `run_tool` calls:
+
+    * `("tools.gmail_downloader",        "Gmail Downloader")`
+    * `("tools.file_analyzer",            "File Analyzer")`
+    * `("tools.process_downloaded_data", "Process Downloaded Data")`
+
+### Proposed additions to `constants.py`
+
+```python
+# agent.py constants
+LOOP_DELAY         = 300  # seconds between cycles
+
+LOGS_DIR           = ROOT_DIR / "logs"
+AGENT_LOG_FILE     = LOGS_DIR / "agent.log"
+AGENT_LOG_ROTATION = "1 week"
+
+AGENT_MODULES = [
+    ("tools.gmail_downloader",        "Gmail Downloader"),
+    ("tools.file_analyzer",            "File Analyzer"),
+    ("tools.process_downloaded_data", "Process Downloaded Data"),
+]
+```
+
+### Refactoring `agent.py`
+
+1. **Import** constants:
+
+   ```python
+   from constants import (
+       LOOP_DELAY,
+       LOGS_DIR,
+       AGENT_LOG_FILE,
+       AGENT_LOG_ROTATION,
+       AGENT_MODULES,
+   )
+   ```
+2. **Replace** inline definitions:
+
+   ```python
+   # Remove: LOGS_DIR = Path(__file__).parent / "logs"
+   # Use imported LOGS_DIR
+   LOGS_DIR.mkdir(exist_ok=True)
+
+   # In agent_loop:
+   logger.add(AGENT_LOG_FILE, rotation=AGENT_LOG_ROTATION)
+
+   for module, label in AGENT_MODULES:
+       run_tool(module, label)
+
+   # Use LOOP_DELAY instead of literal
+   logger.info(f"Sleeping for {LOOP_DELAY} seconds...")
+   time.sleep(LOOP_DELAY)
+   ```
+
+## 5. Constants in `gmail_downloader.py`
+
+The following in-file constants in \`\` should be centralized:
+
+* **Directory & File Paths**
+
+  * `BASE_DIR = Path(__file__).resolve().parent`
+  * `DOWNLOAD_DIR = BASE_DIR / "downloads"`
+  * `HISTORY_FILE = BASE_DIR / "downloaded_attachments.json"`
+  * `RESULTS_DIR = BASE_DIR / "results"`
+  * `RESULTS_FILE = RESULTS_DIR / "gmail_downloader.json"`
+  * `TOKEN_FILE = BASE_DIR / "token.json"`
+* **Gmail API Settings**
+
+  * `SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]`
+  * Query string: `"has:attachment"`
+  * Pagination size: `maxResults=100`
+* **Logging Settings**
+
+  * `LOGS_DIR = BASE_DIR / "logs"`
+  * Log filename: `"gmail_downloader.log"`
+  * Rotation policy: `"1 week"`
+
+### Proposed additions to `constants.py`
+
+```python
+# gmail_downloader.py constants
+TOKEN_FILE             = ROOT_DIR / "token.json"
+DOWNLOAD_DIR           = ROOT_DIR / "downloads"
+HISTORY_FILE           = ROOT_DIR / "downloaded_attachments.json"
+RESULTS_DIR            = ROOT_DIR / "results"
+GMAIL_RESULTS_FILE     = RESULTS_DIR / "gmail_downloader.json"
+
+GMAIL_SCOPES           = [
+    "https://www.googleapis.com/auth/gmail.readonly",
+]
+GMAIL_ATTACHMENT_QUERY = "has:attachment"
+MAX_PAGE_SIZE          = 100
+
+LOGS_DIR               = ROOT_DIR / "logs"
+GMAIL_LOG_FILE         = LOGS_DIR / "gmail_downloader.log"
+GMAIL_LOG_ROTATION     = "1 week"
+```
+
+### Refactoring `gmail_downloader.py`
+
+1. **Import** these constants:
+
+   ```python
+   from constants import (
+       ROOT_DIR,
+       DOWNLOAD_DIR,
+       HISTORY_FILE,
+       RESULTS_DIR,
+       GMAIL_RESULTS_FILE,
+       TOKEN_FILE,
+       GMAIL_SCOPES,
+       GMAIL_ATTACHMENT_QUERY,
+       MAX_PAGE_SIZE,
+       LOGS_DIR,
+       GMAIL_LOG_FILE,
+       GMAIL_LOG_ROTATION,
+   )
+   ```
+2. **Remove** inline assignments at top (`BASE_DIR`, `DOWNLOAD_DIR`, etc.) and replace usage with imported constants.
+3. **Replace** hard-coded query and pagination:
+
+   ```python
+   response = service.users().messages().list(
+       userId="me",
+       q=GMAIL_ATTACHMENT_QUERY,
+       maxResults=MAX_PAGE_SIZE,
+       pageToken=page_token
+   ).execute()
+   ```
+4. **Configure logging** using constants:
+
+   ```python
+   LOGS_DIR.mkdir(exist_ok=True)
+   logger.add(GMAIL_LOG_FILE, rotation=GMAIL_LOG_ROTATION)
+   ```
+
+## 6. Constants in `file_analyzer.py`
+
+The following in-file constants in \`\` should be centralized:
+
+* **Directory & File Paths**
+
+  * `BASE_DIR = Path(__file__).resolve().parent`
+  * `DOWNLOADS_DIR = BASE_DIR / "downloads"`
+  * `ANALYSIS_DIR = BASE_DIR / "analysis"`
+  * `RESULTS_DIR = BASE_DIR / "results"`
+  * `LOGS_DIR = BASE_DIR / "logs"`
+  * `MEMORY_FILE = BASE_DIR / "categorization_memory.json"`
+  * `UNHANDLED_FILE = BASE_DIR / "unhandled_filedata.json"`
+  * `CONTEXT_FILE = RESULTS_DIR / "gmail_downloader.json"`
+* **Logging Settings**
+
+  * Log filename: `"file_analyzer.log"`
+  * Rotation policy: `"1 week"`
+  * Retention policy: `"4 weeks"`
+
+### Proposed additions to `constants.py`
+
+```python
+# file_analyzer.py constants
+DOWNLOADS_DIR            = ROOT_DIR / "downloads"
+ANALYSIS_DIR             = ROOT_DIR / "analysis"
+RESULTS_DIR              = ROOT_DIR / "results"
+FILE_ANALYZER_CONTEXT    = RESULTS_DIR / "gmail_downloader.json"
+
+MEMORY_FILE              = ROOT_DIR / "categorization_memory.json"
+UNHANDLED_FILE           = ROOT_DIR / "unhandled_filedata.json"
+
+LOGS_DIR                 = ROOT_DIR / "logs"
+FILE_ANALYZER_LOG_FILE   = LOGS_DIR / "file_analyzer.log"
+FILE_ANALYZER_LOG_ROTATION = "1 week"
+FILE_ANALYZER_LOG_RETENTION = "4 weeks"
+```
+
+### Refactoring `file_analyzer.py`
+
+1. **Import** constants:
+
+   ```python
+   from constants import (
+       DOWNLOADS_DIR,
+       ANALYSIS_DIR,
+       RESULTS_DIR,
+       FILE_ANALYZER_CONTEXT,
+       MEMORY_FILE,
+       UNHANDLED_FILE,
+       LOGS_DIR,
+       FILE_ANALYZER_LOG_FILE,
+       FILE_ANALYZER_LOG_ROTATION,
+       FILE_ANALYZER_LOG_RETENTION,
+   )
+   ```
+2. **Remove** all inline `BASE_DIR`, `*_DIR`, and file-path definitions at top.
+3. **Update** `ensure_directories()` to iterate over imported `DOWNLOADS_DIR`, `ANALYSIS_DIR`, `RESULTS_DIR`, and `LOGS_DIR`.
+4. **Update** `configure_logging()`:
+
+   ```python
+   LOGS_DIR.mkdir(parents=True, exist_ok=True)
+   logger.add(
+       FILE_ANALYZER_LOG_FILE,
+       rotation=FILE_ANALYZER_LOG_ROTATION,
+       retention=FILE_ANALYZER_LOG_RETENTION,
+       level="DEBUG"
+   )
+   ```
+5. **Replace** hard-coded context path in `load_context()`:
+
+   ```python
+   path = FILE_ANALYZER_CONTEXT
+   ```
+
+## 7. Constants in `process_downloaded_data.py`
+
+The following in-file constants in \`\` should be centralized:
+
+* **Log settings**
+
+  * `LOG_FILENAME = "process_downloads.log"`
+* **Memory & data filenames**
+
+  * `MEMORY_FILENAME = "categorization_memory.json"`
+  * `UNHANDLED_FILENAME = "unhandled_filedata.json"`
+* **Script references**
+
+  * `PRINT_TOOL_SCRIPT = "print_tool.py"`
+
+### Proposed additions to `constants.py`
+
+```python
+# process_downloaded_data.py constants
+LOGS_DIR                   = ROOT_DIR / "logs"
+PROCESS_DOWNLOADS_LOG_FILE = LOGS_DIR / "process_downloads.log"
+PROCESS_DOWNLOADS_LOG_ROTATION = "1 week"
+
+MEMORY_FILE                = ROOT_DIR / "tools" / "categorization_memory.json"
+UNHANDLED_FILE             = ROOT_DIR / "unhandled_filedata.json"
+PRINT_TOOL_PATH            = ROOT_DIR / "tools" / "print_tool.py"
+```
+
+### Refactoring `process_downloaded_data.py`
+
+1. **Import** constants:
+
+   ```python
+   from constants import (
+       LOGS_DIR,
+       PROCESS_DOWNLOADS_LOG_FILE,
+       PROCESS_DOWNLOADS_LOG_ROTATION,
+       MEMORY_FILE,
+       UNHANDLED_FILE,
+       PRINT_TOOL_PATH,
+   )
+   ```
+2. **Remove** inline definitions of `LOG_FILENAME`, `MEMORY_FILENAME`, `UNHANDLED_FILENAME`, `PRINT_TOOL_SCRIPT`.
+3. **Update** `configure_paths()` to reference `ROOT_DIR`, but you may drop `MEMORY_FILENAME` and `UNHANDLED_FILENAME` constants entirely, using imported `MEMORY_FILE` and `UNHANDLED_FILE` directly:
+
+   ```python
+   paths = {
+       "mem_path": MEMORY_FILE,
+       "unhandled_path": UNHANDLED_FILE,
+       "print_tool": PRINT_TOOL_PATH,
+       # downloads_dir, archive_dir, tools_dir, logs_dir: replace with constants or still compute
+   }
+   ```
+4. **Configure logging** using constants:
+
+   ```python
+   LOGS_DIR.mkdir(parents=True, exist_ok=True)
+   logger.add(
+       PROCESS_DOWNLOADS_LOG_FILE,
+       rotation=PROCESS_DOWNLOADS_LOG_ROTATION,
+       level="INFO"
+   )
+   ```
+5. Replace subprocess invocation to use `PRINT_TOOL_PATH` instead of string script name.
+
+## 9. Constants in `print_tool.py`
+
+The following in-file constants in **`print_tool.py`** should be centralized:
+
+* **Supported file suffixes**
+
+  * `SUPPORTED_SUFFIXES = {'.pdf', '.html'}`
+* **Default print command flags**
+
+  * `LPR_CMD = 'lpr'`
+  * `LPR_PRINTER_FLAG = '-P'`
+* **Default log rotation**
+
+  * `PRINT_TOOL_LOG_ROTATION = '1 week'`
+
+### Proposed additions to `constants.py`
+
+```python
+# print_tool.py constants
+SUPPORTED_SUFFIXES         = {'.pdf', '.html'}
+LPR_CMD                   = 'lpr'
+LPR_PRINTER_FLAG          = '-P'
+PRINT_TOOL_LOG_ROTATION   = '1 week'
+```
+
+### Refactoring `print_tool.py`
+
+1. **Import** constants:
+
+   ```python
+   from constants import (
+       SUPPORTED_SUFFIXES,
+       LPR_CMD,
+       LPR_PRINTER_FLAG,
+       PRINT_TOOL_LOG_ROTATION,
+   )
+   ```
+2. **Replace** hard-coded suffixes and command strings (e.g., `'.pdf', '.html'`, `"lpr"`, `"-P"`) with imported constants.
+3. **Configure logging** using `PRINT_TOOL_LOG_ROTATION` instead of literal.
+
+## 10. Constants in `openai_tools.py`
+
+The following in-file constants in **`openai_tools.py`** should be centralized:
+
+* **Model settings**
+
+  * `OPENAI_MODEL = 'gpt-4o-mini'`
+  * `OPENAI_TEMPERATURE = 0`
+* **System prompt template**
+
+  * The large system message string for chat completions
+
+### Proposed additions to `constants.py`
+
+```python
+# openai_tools.py constants
+OPENAI_MODEL               = 'gpt-4o-mini'
+OPENAI_TEMPERATURE         = 0
+SYSTEM_PROMPT_CONTENT      = (
+    "You are a document-processing assistant. "
+    "When given text, you will output exactly one JSON object "
+    "and nothing else—no bullet points, no introductory text, "
+    "no code fences. The JSON MUST have these three fields:
+"
+    "  • summary (a concise prose summary)
+"
+    "  • contains_structured_data (true or false)
+"
+    "  • notes (any caveats or observations)"
+)
+```
+
+### Refactoring `openai_tools.py`
+
+1. **Import** constants:
+
+   ```python
+   from constants import (
+       OPENAI_MODEL,
+       OPENAI_TEMPERATURE,
+       SYSTEM_PROMPT_CONTENT,
+   )
+   ```
+2. Replace hard-coded model name and temperature in `client.chat.completions.create`.
+3. Replace the system message content string with `SYSTEM_PROMPT_CONTENT`.
+
+## 11. Constants in `startup_checks.py`
+
+The following in-file constants in **`startup_checks.py`** should be centralized:
+
+* **Module & directory lists**
+
+  * `REQUIRED_MODULES`
+  * `REQUIRED_DIRS`
+* **Required environment variables**
+
+  * `REQUIRED_ENV_VARS`
+* **Diagnostic filenames & paths**
+
+  * `DIAGNOSTIC_DIR = Path('heartbeat')`
+  * `DIAGNOSTIC_FILE = DIAGNOSTIC_DIR / 'diagnostic.status.json'`
+
+### Proposed additions to `constants.py`
+
+```python
+# startup_checks.py constants
+REQUIRED_MODULES           = [
+    'utils.openai_tools',
+    'tools.gmail_downloader',
+    'tools.file_analyzer',
+]
+REQUIRED_DIRS              = [
+    ROOT_DIR / 'tools' / 'downloads',
+    ROOT_DIR / 'tools' / 'analysis',
+    ROOT_DIR / 'tools' / 'results',
+    ROOT_DIR / 'logs',
+]
+REQUIRED_ENV_VARS          = [
+    'OPENAI_API_KEY',
+    'GMAIL_CREDENTIALS_PATH',
+]
+DIAGNOSTIC_DIR             = ROOT_DIR / 'heartbeat'
+DIAGNOSTIC_FILE            = DIAGNOSTIC_DIR / 'diagnostic.status.json'
+```
+
+### Refactoring `startup_checks.py`
+
+1. **Import** constants:
+
+   ```python
+   from constants import (
+       REQUIRED_MODULES,
+       REQUIRED_DIRS,
+       REQUIRED_ENV_VARS,
+       DIAGNOSTIC_DIR,
+       DIAGNOSTIC_FILE,
+   )
+   ```
+2. Replace inline definitions of `REQUIRED_MODULES`, `REQUIRED_DIRS`, `REQUIRED_ENV_VARS`, and diagnostic path strings with imported constants.
+3. Use `DIAGNOSTIC_DIR` and `DIAGNOSTIC_FILE` in `write_summary()`.
+
+## 12. Next Steps
+
+1. Finalize and review `constants.py` with all aggregated values.
+2. Migrate each module to import from `constants.py` and remove inline magic values.
+3. Optionally implement Pydantic-based settings for environment overrides.
+4. Run tests and verify no regressions occur after refactoring.
+
+> Constants extraction complete! Let me know if you’d like any adjustments or to proceed with implementation.

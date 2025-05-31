@@ -30,18 +30,31 @@ from google.auth.transport.requests import Request  # Refresh OAuth tokens
 from google_auth_oauthlib.flow import InstalledAppFlow  # OAuth2 flow
 from googleapiclient.discovery import build  # Gmail API client builder
 from google.auth.exceptions import RefreshError  # Handle token refresh errors
-
+from constants import (
+    ROOT_DIR,
+    DOWNLOAD_DIR,
+    HISTORY_FILE,
+    RESULTS_DIR,
+    GMAIL_RESULTS_FILE,
+    TOKEN_FILE,
+    GMAIL_SCOPES,
+    GMAIL_ATTACHMENT_QUERY,
+    MAX_PAGE_SIZE,
+    LOGS_DIR,
+    GMAIL_LOG_FILE,
+    GMAIL_LOG_ROTATION,
+)
 # Load environment variables from a .env file, overriding existing environment values
 load_dotenv(override=True)
 
 # --- Configuration constants ---
-BASE_DIR = Path(__file__).resolve().parent  # Root directory for module files
-DOWNLOAD_DIR = BASE_DIR / "downloads"     # Where attachments will be saved
-HISTORY_FILE = BASE_DIR / "downloaded_attachments.json"  # Tracks processed items
-RESULTS_DIR = BASE_DIR / "results"        # Stores run result logs
-RESULTS_FILE = RESULTS_DIR / "gmail_downloader.json"  # JSON file for each run's summary
-TOKEN_FILE = BASE_DIR / "token.json"      # OAuth token cache
-SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]  # Permissions for Gmail API
+# BASE_DIR = Path(__file__).resolve().parent  # Root directory for module files
+# DOWNLOAD_DIR = BASE_DIR / "downloads"     # Where attachments will be saved
+# HISTORY_FILE = BASE_DIR / "downloaded_attachments.json"  # Tracks processed items
+# RESULTS_DIR = BASE_DIR / "results"        # Stores run result logs
+# RESULTS_FILE = RESULTS_DIR / "gmail_downloader.json"  # JSON file for each run's summary
+# TOKEN_FILE = BASE_DIR / "token.json"      # OAuth token cache
+# SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]  # Permissions for Gmail API
 
 
 def get_credentials_file():
@@ -176,9 +189,9 @@ def download_attachments(service, history):
     while True:
         response = service.users().messages().list(
             userId="me",
-            q="has:attachment",
-            pageToken=page_token,
-            maxResults=100
+            q=GMAIL_ATTACHMENT_QUERY,
+            maxResults=MAX_PAGE_SIZE,
+            pageToken=page_token
         ).execute()
         messages = response.get("messages", [])
         logger.info(f"Found {len(messages)} message(s) on this page.")
@@ -276,9 +289,9 @@ def main():
     Configures logging, authenticates, downloads attachments, writes results, and updates history.
     """
     # Set up log directory and rotation policy (weekly)
-    LOGS_DIR = BASE_DIR / "logs"
+    # LOGS_DIR = BASE_DIR / "logs"
     LOGS_DIR.mkdir(exist_ok=True)
-    logger.add(LOGS_DIR / "gmail_downloader.log", rotation="1 week")  # Rotate logs every week
+    logger.add(GMAIL_LOG_FILE, rotation=GMAIL_LOG_ROTATION)  # Rotate logs every week
 
     # Ensure download folder exists before any downloads
     DOWNLOAD_DIR.mkdir(exist_ok=True)

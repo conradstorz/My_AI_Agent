@@ -6,12 +6,18 @@ import sys
 import time
 from pathlib import Path
 from loguru import logger
-
+from constants import (
+    LOOP_DELAY,
+    LOGS_DIR,
+    AGENT_LOG_FILE,
+    AGENT_LOG_ROTATION,
+    AGENT_MODULES,
+)
 # Configuration
-LOOP_DELAY = 300  # seconds between cycles
+# LOOP_DELAY = 300  # seconds between cycles
 
-LOGS_DIR = Path(__file__).parent / "logs"
-LOGS_DIR.mkdir(exist_ok=True)
+# LOGS_DIR = Path(__file__).parent / "logs"
+# LOGS_DIR.mkdir(exist_ok=True)
 
 def run_tool(module: str, label: str) -> bool:
     logger.info(f"Invoking {label}...")
@@ -29,15 +35,14 @@ def run_tool(module: str, label: str) -> bool:
         return False
 
 def agent_loop():
-    logger.add(LOGS_DIR / "agent.log", rotation="1 week")
+    logger.add(AGENT_LOG_FILE, rotation=AGENT_LOG_ROTATION)
     logger.info("Agent loop starting...")
 
     while True:
         logger.info("=== New agent cycle ===")
 
-        run_tool("tools.gmail_downloader", "Gmail Downloader")
-        run_tool("tools.file_analyzer", "File Analyzer")
-        run_tool("tools.process_downloaded_data", "Process Downloaded Data")
+        for module, label in AGENT_MODULES:
+            run_tool(module, label)
 
         logger.info(f"Sleeping for {LOOP_DELAY} seconds...")
         time.sleep(LOOP_DELAY)

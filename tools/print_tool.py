@@ -12,19 +12,25 @@ import platform
 import subprocess
 from pathlib import Path
 from loguru import logger
+from constants import (
+    SUPPORTED_SUFFIXES,
+    LPR_CMD,
+    LPR_PRINTER_FLAG,
+    PRINT_TOOL_LOG_ROTATION,
+)
 
 try:
-    import win32print
-except ImportError:
-    win32print = None
+    import win32print # type: ignore[import]
+except ImportError: 
+    win32print = None # Optional import for Windows printing
 
 
 def print_file(path: Path, printer: str = None):
     system = platform.system()
     if system in ("Linux", "Darwin"):
-        cmd = ["lpr"]
+        cmd = LPR_CMD
         if printer:
-            cmd.extend(["-P", printer])
+            cmd.extend([LPR_PRINTER_FLAG, printer])
         cmd.append(str(path))
         try:
             subprocess.run(cmd, check=True)
@@ -75,7 +81,7 @@ def main():
     # Configure logging
     if args.log:
         args.log.parent.mkdir(parents=True, exist_ok=True)
-        logger.add(args.log, rotation="1 week")
+        logger.add(args.log, rotation=PRINT_TOOL_LOG_ROTATION)
     else:
         logger.remove()  # prevent duplicate default logs
         logger.add(lambda msg: print(msg, end=''))
@@ -85,7 +91,7 @@ def main():
             logger.error(f"File not found: {file_path}")
             continue
         suffix = file_path.suffix.lower()
-        if suffix not in {'.pdf', '.html'}:
+        if suffix not in SUPPORTED_SUFFIXES:
             logger.warning(f"Unsupported file type {suffix}, skipping {file_path.name}.")
             continue
         print_file(file_path, args.printer)
