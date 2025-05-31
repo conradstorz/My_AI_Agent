@@ -41,7 +41,11 @@ context = {}
 
 def ensure_directories():
     """Create required directories if they don't exist."""
-    for d in (DOWNLOADS_DIR, ANALYSIS_DIR, RESULTS_DIR, LOGS_DIR):
+    for d in (FILE_ANALYZER_DOWNLOADS_DIR, 
+              FILE_ANALYZER_ANALYSIS_DIR, 
+              RESULTS_DIR, 
+              LOGS_DIR
+              ):
         d.mkdir(parents=True, exist_ok=True)
 
 
@@ -107,7 +111,7 @@ def load_messages() -> list:
 
 def is_analyzed(stem: str) -> bool:
     """Check if an analysis file already exists for a stem."""
-    return (ANALYSIS_DIR / f"{stem}.analysis.json").exists()
+    return (FILE_ANALYZER_ANALYSIS_DIR / f"{stem}.analysis.json").exists()
 
 
 def extract_pdf(file: Path) -> str:
@@ -174,7 +178,7 @@ def summarize_content(content: str, identifier: str) -> dict:
 
 def save_analysis(stem: str, analysis: dict):
     """Write analysis JSON to the analysis directory."""
-    path = ANALYSIS_DIR / f"{stem}.analysis.json"
+    path = FILE_ANALYZER_ANALYSIS_DIR / f"{stem}.analysis.json"
     try:
         path.write_text(json.dumps(analysis, indent=2), encoding="utf-8")
         logger.info(f"Saved analysis: {path.name}")
@@ -235,7 +239,7 @@ def process_message(message: dict):
 def run():
     """Analyze all downloaded files and fetched messages."""
     logger.info("Starting analysis...")
-    for file in DOWNLOADS_DIR.glob("*.*"):
+    for file in FILE_ANALYZER_DOWNLOADS_DIR.glob("*.*"):
         if is_analyzed(file.stem):
             logger.debug(f"Already analyzed: {file.name}")
             continue
@@ -256,14 +260,14 @@ def main():
     load_dotenv()
 
     global memory, unhandled, context
-    memory = load_json(MEMORY_FILE, {})
-    unhandled = load_json(UNHANDLED_FILE, [])
+    memory = load_json(FILE_ANALYZER_MEMORY_FILE, {})
+    unhandled = load_json(FILE_ANALYZER_UNHANDLED_FILE, [])
     context = load_context()
 
     run()
 
-    save_json(memory, MEMORY_FILE)
-    save_json(unhandled, UNHANDLED_FILE)
+    save_json(memory, FILE_ANALYZER_MEMORY_FILE)
+    save_json(unhandled, FILE_ANALYZER_UNHANDLED_FILE)
     logger.info("Analysis complete.")
 
 

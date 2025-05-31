@@ -43,6 +43,8 @@ from constants import (
     LOGS_DIR,
     GMAIL_LOG_FILE,
     GMAIL_LOG_ROTATION,
+    GMAIL_SCOPES,
+    GMAIL_CREDENTIALS_PATH,
 )
 # Load environment variables from a .env file, overriding existing environment values
 load_dotenv(override=True)
@@ -122,7 +124,7 @@ def authenticate():
             # Launch local server for user to authorize the app
             logger.info("Launching OAuth2 flow for Gmail API...")
             flow = InstalledAppFlow.from_client_secrets_file(
-                str(credentials_file), SCOPES)
+                str(credentials_file), GMAIL_SCOPES)
             creds = flow.run_local_server(port=0)
         # Persist the refreshed or new credentials
         with open(TOKEN_FILE, "wb") as token_fp:
@@ -277,9 +279,9 @@ def write_result(downloaded_info):
         "timestamp": time.time()
     }
     # Append JSON object to the results file for auditing
-    with RESULTS_FILE.open("a") as f:  # this does not work it corrupts the json file
+    with GMAIL_RESULTS_FILE.open("a") as f:  # this does not work it corrupts the json file
         json.dump(result, f, indent=2)
-    logger.info(f"Result JSON appended to: {RESULTS_FILE}")
+    logger.info(f"Result JSON appended to: {GMAIL_RESULTS_FILE}")
 
 
 def main():

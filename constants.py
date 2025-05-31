@@ -50,8 +50,8 @@ AGENT_MODULES = [
 TOKEN_FILE = ROOT_DIR / "token.json"
 DOWNLOAD_DIR = ROOT_DIR / "downloads"
 HISTORY_FILE = ROOT_DIR / "downloaded_attachments.json"
-RESULTS_DIR = ROOT_DIR / "results"
-GMAIL_RESULTS_FILE = RESULTS_DIR / "gmail_downloader.json"
+GMAIL_RESULTS_DIR = ROOT_DIR / "results"
+GMAIL_RESULTS_FILE = GMAIL_RESULTS_DIR / "gmail_downloader.json"
 
 # Gmail API settings
 GMAIL_SCOPES = [
@@ -126,18 +126,18 @@ SYSTEM_PROMPT_CONTENT = (
 # ================================
 # startup_checks.py constants
 # ================================
-REQUIRED_MODULES = [
+STARTUP_CHECKS_REQUIRED_MODULES = [
     'utils.openai_tools',
     'tools.gmail_downloader',
     'tools.file_analyzer',
 ]
-REQUIRED_DIRS = [
+STARTUP_CHECKS_REQUIRED_DIRS = [
     ROOT_DIR / 'tools' / 'downloads',
     ROOT_DIR / 'tools' / 'analysis',
     ROOT_DIR / 'tools' / 'results',
     LOGS_DIR,
 ]
-REQUIRED_ENV_VARS = [
+STARTUP_CHECKS_REQUIRED_ENV_VARS = [
     'OPENAI_API_KEY',
     'GMAIL_CREDENTIALS_PATH',
 ]

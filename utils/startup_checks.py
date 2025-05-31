@@ -5,7 +5,13 @@ import os
 import sys
 import json
 from dotenv import dotenv_values, load_dotenv
- 
+from constants import (
+    STARTUP_CHECKS_REQUIRED_MODULES,
+    STARTUP_CHECKS_REQUIRED_DIRS,
+    STARTUP_CHECKS_REQUIRED_ENV_VARS,
+    DIAGNOSTIC_DIR,
+    DIAGNOSTIC_FILE,
+)
 import time
 
 REQUIRED_MODULES = [
@@ -27,7 +33,7 @@ REQUIRED_ENV_VARS = [
 ]
 
 def check_modules():
-    for module in REQUIRED_MODULES:
+    for module in STARTUP_CHECKS_REQUIRED_MODULES:
         try:
             importlib.import_module(module)
             logger.info(f"✅ Import OK: {module}")
@@ -35,7 +41,7 @@ def check_modules():
             logger.error(f"❌ Import failed: {module} — {e}")
 
 def check_directories():
-    for d in REQUIRED_DIRS:
+    for d in STARTUP_CHECKS_REQUIRED_DIRS:
         if not d.exists():
             logger.warning(f"🟡 Missing directory: {d}")
         else:
@@ -45,7 +51,7 @@ def check_environment_vars():
     load_dotenv(override=True)
     env_file_values = dotenv_values()
 
-    for var in REQUIRED_ENV_VARS:
+    for var in STARTUP_CHECKS_REQUIRED_ENV_VARS:
         val = os.getenv(var)
 
         if val is None:
@@ -59,9 +65,9 @@ def check_environment_vars():
 
 
 def write_summary(status: str, summary: str):
-    heartbeat_dir = Path("heartbeat")
-    heartbeat_dir.mkdir(exist_ok=True)
-    summary_file = heartbeat_dir / "diagnostic.status.json"
+    # heartbeat_dir = Path("heartbeat")
+    DIAGNOSTIC_DIR.mkdir(exist_ok=True)
+    summary_file = DIAGNOSTIC_FILE
     with summary_file.open("w") as f:
         json.dump({
             "timestamp": time.time(),

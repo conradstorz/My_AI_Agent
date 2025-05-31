@@ -40,9 +40,9 @@ def configure_paths():
         "archive_dir":    AGENT_ARCHIVE_DIR,
         "tools_dir":      AGENT_TOOLS_DIR,
         "logs_dir":       AGENT_LOGS_DIR,
-        "mem_path":       MEMORY_FILE,
-        "unhandled_path": UNHANDLED_FILE,
-        "print_tool":     PRINT_TOOL_PATH,
+        "mem_path":       PROCESS_DOWNLOADS_MEMORY_FILE,
+        "unhandled_path": PROCESS_DOWNLOADS_UNHANDLED_FILE,
+        "print_tool":     PROCESS_DOWNLOADS_PRINT_TOOL_PATH,
     }
     return paths
 
