@@ -12,12 +12,12 @@ import fitz  # PyMuPDF
 import pandas as pd
 from utils.openai_tools import summarize_document
 from constants import (
-    DOWNLOADS_DIR,
-    ANALYSIS_DIR,
+    FILE_ANALYZER_DOWNLOADS_DIR,
+    FILE_ANALYZER_ANALYSIS_DIR,
     RESULTS_DIR,
     FILE_ANALYZER_CONTEXT,
-    MEMORY_FILE,
-    UNHANDLED_FILE,
+    FILE_ANALYZER_MEMORY_FILE,
+    FILE_ANALYZER_UNHANDLED_FILE,
     LOGS_DIR,
     FILE_ANALYZER_LOG_FILE,
     FILE_ANALYZER_LOG_ROTATION,

@@ -4,6 +4,13 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).parent
 
 # ================================
+# Common constants
+# ================================
+HASH_ALGORITHM = "sha256"
+FILENAME_FORMAT = "{hash}_{original_name}"
+API_TIMEOUT_SECONDS = 30
+
+# ================================
 # main.py constants
 # ================================
 # Heartbeat settings
@@ -78,13 +85,13 @@ FILE_ANALYZER_LOG_RETENTION = "4 weeks"
 # process_downloaded_data.py constants
 # ================================
 # Logging settings
-PROCESS_LOG_FILE = LOGS_DIR / "process_downloads.log"
-PROCESS_LOG_ROTATION = "1 week"
+PROCESS_DOWNLOADS_LOG_FILE = LOGS_DIR / "process_downloads.log"
+PROCESS_DOWNLOADS_LOG_ROTATION = "1 week"
 
 # Memory & data filenames (for process module)
-PROCESS_MEMORY_FILE = ROOT_DIR / "tools" / "categorization_memory.json"
-PROCESS_UNHANDLED_FILE = ROOT_DIR / "unhandled_filedata.json"
-PROCESS_PRINT_TOOL_PATH = ROOT_DIR / "tools" / "print_tool.py"
+PROCESS_DOWNLOADS_MEMORY_FILE = ROOT_DIR / "tools" / "categorization_memory.json"
+PROCESS_DOWNLOADS_UNHANDLED_FILE = ROOT_DIR / "unhandled_filedata.json"
+PROCESS_DOWNLOADS_PRINT_TOOL_PATH = ROOT_DIR / "tools" / "print_tool.py"
 
 # Agent directories (flatten naming)
 AGENT_ROOT = ROOT_DIR
@@ -149,10 +156,3 @@ AGENT_CMD = [
 ]
 WATCHDOG_LOG_FILE = LOGS_DIR / 'watchdog.log'
 WATCHDOG_LOG_ROTATION = '1 week'
-
-# ================================
-# Common constants
-# ================================
-HASH_ALGORITHM = "sha256"
-FILENAME_FORMAT = "{hash}_{original_name}"
-API_TIMEOUT_SECONDS = 30
