@@ -31,10 +31,9 @@ from google_auth_oauthlib.flow import InstalledAppFlow  # OAuth2 flow
 from googleapiclient.discovery import build  # Gmail API client builder
 from google.auth.exceptions import RefreshError  # Handle token refresh errors
 from constants import (
-    ROOT_DIR,
     DOWNLOAD_DIR,
     HISTORY_FILE,
-    RESULTS_DIR,
+    GMAIL_RESULTS_DIR,
     GMAIL_RESULTS_FILE,
     TOKEN_FILE,
     GMAIL_SCOPES,
@@ -44,7 +43,6 @@ from constants import (
     GMAIL_LOG_FILE,
     GMAIL_LOG_ROTATION,
     GMAIL_SCOPES,
-    GMAIL_CREDENTIALS_PATH,
 )
 # Load environment variables from a .env file, overriding existing environment values
 load_dotenv(override=True)
@@ -270,7 +268,7 @@ def write_result(downloaded_info):
     :type downloaded_info: list
     """
     # Ensure the results directory exists
-    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    GMAIL_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     # Build result payload
     result = {
         "tool": "GmailDownloader",

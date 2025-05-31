@@ -14,7 +14,7 @@ from utils.openai_tools import summarize_document
 from constants import (
     FILE_ANALYZER_DOWNLOADS_DIR,
     FILE_ANALYZER_ANALYSIS_DIR,
-    RESULTS_DIR,
+    FILE_ANALYZER_RESULTS_DIR,
     FILE_ANALYZER_CONTEXT,
     FILE_ANALYZER_MEMORY_FILE,
     FILE_ANALYZER_UNHANDLED_FILE,
@@ -43,7 +43,7 @@ def ensure_directories():
     """Create required directories if they don't exist."""
     for d in (FILE_ANALYZER_DOWNLOADS_DIR, 
               FILE_ANALYZER_ANALYSIS_DIR, 
-              RESULTS_DIR, 
+              FILE_ANALYZER_RESULTS_DIR, 
               LOGS_DIR
               ):
         d.mkdir(parents=True, exist_ok=True)
@@ -97,7 +97,7 @@ def load_context() -> dict:
 
 def load_messages() -> list:
     """Load inline messages from gmail_downloader.json."""
-    path = RESULTS_DIR / "gmail_downloader.json"
+    path = FILE_ANALYZER_RESULTS_DIR / "gmail_downloader.json"
     if not path.exists():
         logger.warning(f"No {path} found.")
         return []
