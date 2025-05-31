@@ -32,6 +32,6 @@ heartbeat/
 Thumbs.db
 
 # Agentic process files
-tools/downloads/
-tools/downloaded_attachments.json
+downloads/
+downloaded_attachments.json
 tools/analysis/
