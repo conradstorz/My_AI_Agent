@@ -1,7 +1,20 @@
+"""
+constants.py
+
+Centralized configuration values for the entire agentic project:
+- File and directory paths (heartbeat, downloads, logs, etc.)
+- Magic numbers (intervals, timeouts, rotation schedules)
+- API settings (OpenAI model, Gmail scopes, etc.)
+- Static prompts or command templates
+
+All paths are built off ROOT_DIR (the directory containing this file).
+"""
+
 from pathlib import Path
 
 # Root directory for the project
 ROOT_DIR = Path(__file__).parent
+TOOLS_DIR = ROOT_DIR / "tools"
 
 # ================================
 # Common constants
@@ -90,9 +103,9 @@ PROCESS_DOWNLOADS_LOG_FILE = LOGS_DIR / "process_downloads.log"
 PROCESS_DOWNLOADS_LOG_ROTATION = "1 week"
 
 # Memory & data filenames (for process module)
-PROCESS_DOWNLOADS_MEMORY_FILE = ROOT_DIR / "tools" / "categorization_memory.json"
+PROCESS_DOWNLOADS_MEMORY_FILE = TOOLS_DIR / "categorization_memory.json"
 PROCESS_DOWNLOADS_UNHANDLED_FILE = ROOT_DIR / "unhandled_filedata.json"
-PROCESS_DOWNLOADS_PRINT_TOOL_PATH = ROOT_DIR / "tools" / "print_tool.py"
+PROCESS_DOWNLOADS_PRINT_TOOL_PATH = TOOLS_DIR / "print_tool.py"
 
 # Agent directories (flatten naming)
 AGENT_ROOT = ROOT_DIR
@@ -114,15 +127,13 @@ PRINT_TOOL_LOG_ROTATION = '1 week'
 # ================================
 OPENAI_MODEL = 'gpt-4o-mini'
 OPENAI_TEMPERATURE = 0
-SYSTEM_PROMPT_CONTENT = (
-    "You are a document-processing assistant. "
-    "When given text, you will output exactly one JSON object "
-    "and nothing else—no bullet points, no introductory text, "
-    "no code fences. The JSON MUST have these three fields:\n"
-    "  • summary (a concise prose summary)\n"
-    "  • contains_structured_data (true or false)\n"
-    "  • notes (any caveats or observations)"
-)
+SYSTEM_PROMPT_CONTENT: str = """\
+You are a document-processing assistant. When given text, you will output exactly one JSON object
+and nothing else—no bullet points, no introductory text, no code fences. The JSON MUST have these three fields:
+  • summary (a concise prose summary)
+  • contains_structured_data (true or false)
+  • notes (any caveats or observations)
+"""  # Note that the first character is '\' to avoid the first line being blank in this multiline string.
 
 # ================================
 # startup_checks.py constants
@@ -133,9 +144,9 @@ STARTUP_CHECKS_REQUIRED_MODULES = [
     'tools.file_analyzer',
 ]
 STARTUP_CHECKS_REQUIRED_DIRS = [
-    ROOT_DIR / 'tools' / 'downloads',
-    ROOT_DIR / 'tools' / 'analysis',
-    ROOT_DIR / 'tools' / 'results',
+    TOOLS_DIR / 'downloads',
+    TOOLS_DIR / 'analysis',
+    TOOLS_DIR / 'results',
     LOGS_DIR,
 ]
 STARTUP_CHECKS_REQUIRED_ENV_VARS = [
