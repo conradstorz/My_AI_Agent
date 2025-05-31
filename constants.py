@@ -2,7 +2,7 @@ from pathlib import Path
 
 # Root directory for the project
 ROOT_DIR = Path(__file__).parent
- 
+
 # ================================
 # main.py constants
 # ================================
@@ -61,13 +61,13 @@ GMAIL_LOG_ROTATION = "1 week"
 # file_analyzer.py constants
 # ================================
 # File paths
-DOWNLOADS_DIR = ROOT_DIR / "downloads"
-ANALYSIS_DIR = ROOT_DIR / "analysis"
-# Note: RESULTS_DIR already defined above
-FILE_ANALYZER_CONTEXT = RESULTS_DIR / "gmail_downloader.json"
+FILE_ANALYZER_DOWNLOADS_DIR = ROOT_DIR / "downloads"
+FILE_ANALYZER_ANALYSIS_DIR = ROOT_DIR / "analysis"
+# RESULTS_DIR already defined above
+FILE_ANALYZER_CONTEXT = GMAIL_RESULTS_FILE
 
-MEMORY_FILE = ROOT_DIR / "categorization_memory.json"
-UNHANDLED_FILE = ROOT_DIR / "unhandled_filedata.json"
+FILE_ANALYZER_MEMORY_FILE = ROOT_DIR / "categorization_memory.json"
+FILE_ANALYZER_UNHANDLED_FILE = ROOT_DIR / "unhandled_filedata.json"
 
 # Logging settings for file_analyzer
 FILE_ANALYZER_LOG_FILE = LOGS_DIR / "file_analyzer.log"
@@ -78,21 +78,20 @@ FILE_ANALYZER_LOG_RETENTION = "4 weeks"
 # process_downloaded_data.py constants
 # ================================
 # Logging settings
-PROCESS_DOWNLOADS_LOG_FILE = LOGS_DIR / "process_downloads.log"
-PROCESS_DOWNLOADS_LOG_ROTATION = "1 week"
+PROCESS_LOG_FILE = LOGS_DIR / "process_downloads.log"
+PROCESS_LOG_ROTATION = "1 week"
 
-# Memory & data filenames
-# Adjusted to point inside tools directory if needed
-MEMORY_FILE = ROOT_DIR / "tools" / "categorization_memory.json"
-UNHANDLED_FILE = ROOT_DIR / "unhandled_filedata.json"
-PRINT_TOOL_PATH = ROOT_DIR / "tools" / "print_tool.py"
+# Memory & data filenames (for process module)
+PROCESS_MEMORY_FILE = ROOT_DIR / "tools" / "categorization_memory.json"
+PROCESS_UNHANDLED_FILE = ROOT_DIR / "unhandled_filedata.json"
+PROCESS_PRINT_TOOL_PATH = ROOT_DIR / "tools" / "print_tool.py"
 
-# Agent directories
+# Agent directories (flatten naming)
 AGENT_ROOT = ROOT_DIR
-AGENT_DOWNLOADS_DIR = AGENT_ROOT / "downloads",
-AGENT_ARCHIVE_DIR = AGENT_ROOT / "archive",
-AGENT_TOOLS_DIR = AGENT_ROOT / "tools",
-AGENT_LOGS_DIR = AGENT_ROOT / "logs",
+AGENT_DOWNLOADS_DIR = AGENT_ROOT / "downloads"
+AGENT_ARCHIVE_DIR = AGENT_ROOT / "archive"
+AGENT_TOOLS_DIR = AGENT_ROOT / "tools"
+AGENT_LOGS_DIR = AGENT_ROOT / "logs"
 
 # ================================
 # print_tool.py constants
@@ -137,6 +136,19 @@ REQUIRED_ENV_VARS = [
 ]
 DIAGNOSTIC_DIR = ROOT_DIR / 'heartbeat'
 DIAGNOSTIC_FILE = DIAGNOSTIC_DIR / 'diagnostic.status.json'
+
+# ================================
+# watchdog.py constants
+# ================================
+WATCHDOG_HEARTBEAT_FILE = ROOT_DIR / 'heartbeat' / 'agent.status.json'
+MAX_HEARTBEAT_AGE = 120  # seconds before considered stale
+CHECK_INTERVAL = 30      # seconds between checks
+AGENT_CMD = [
+    sys.executable if (sys := __import__('sys')) else 'python',
+    str(ROOT_DIR / 'main.py')
+]
+WATCHDOG_LOG_FILE = LOGS_DIR / 'watchdog.log'
+WATCHDOG_LOG_ROTATION = '1 week'
 
 # ================================
 # Common constants
