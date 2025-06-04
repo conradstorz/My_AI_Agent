@@ -1,0 +1,120 @@
+# syntax=docker/dockerfile:1.2
+###############################################################################
+# Stage 1: Build dependencies with UV
+# Use Astral’s official uv image (Debian-slim variant) to install Python
+# dependencies into a venv, leveraging Docker layer caching and uv’s cache mount.
+###############################################################################
+FROM ghcr.io/astral-sh/uv:debian-slim AS builder
+
+# Set working directory
+WORKDIR /app
+
+# Copy only UV’s lock & manifest files first (so that Docker caches dependency installs)
+COPY uv.lock uv_manifest.toml /app/
+
+# Create a virtual environment at /opt/venv and install _only_ dependencies
+#   --mount=type=cache,target=/root/.cache/uv   → persist uv’s package cache across builds
+#   uv venv /opt/venv                           → create a venv at /opt/venv
+#   uv sync --locked                            → install all locked dependencies into that venv
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv venv /opt/venv && \
+    uv sync --locked
+
+###############################################################################
+# Stage 2: Copy venv + project into a slim Python runtime
+###############################################################################
+FROM python:3.10-slim
+
+# Ensure we don’t buffer stdout/stderr
+ENV PYTHONUNBUFFERED=1
+
+# Copy the pre-built venv from the builder stage
+COPY --from=builder /opt/venv /opt/venv
+
+# Put the venv’s bin/ first in PATH so 'python' & any installed CLI tools (like uv) work
+ENV PATH="/opt/venv/bin:${PATH}"
+
+# Set working directory
+WORKDIR /app
+
+# Copy the rest of the application source code
+COPY . /app
+
+# Pre-create directories that the code expects (the scripts also mkdir(...) if missing)
+RUN mkdir -p logs downloads results analysis heartbeat archive
+
+# Default entrypoint: use UV to run main.py inside the venv
+CMD ["uv", "run", "main.py"]
+
+
+# """   'I Had to use co-pilot to create this multi-line comment block because I don't know how to do it otherwise'
+# Explanation
+#
+# FROM ghcr.io/astral-sh/uv:debian-slim AS builder
+#
+# Uses Astral’s official UV image (Debian-slim variant) as the build stage. It already includes Python 3.x and the uv CLI.
+#
+# COPY uv.lock uv_manifest.toml /app/
+#
+# Copies only UV’s lock and manifest files into the image. By doing this first, changes to your application code won’t bust the layer that installs dependencies.
+#
+# RUN --mount=type=cache,target=/root/.cache/uv \
+#
+# Instructs Docker to cache UV’s download artifacts under /root/.cache/uv. On subsequent builds, UV will reuse that cache, massively speeding up uv sync.
+#
+# uv venv /opt/venv && uv sync --locked
+#
+# uv venv /opt/venv: creates a new virtual environment at /opt/venv.
+#
+# uv sync --locked: installs all locked dependencies (from uv.lock) into that venv.
+#
+# FROM python:3.10-slim (final stage)
+#
+# Switches to a minimal Python runtime. We don’t need UV installed at build time anymore—everything UV needed (and the venv itself) was prepared in the builder stage.
+#
+# COPY --from=builder /opt/venv /opt/venv
+#
+# Brings in the fully populated venv (with all dependencies) from the builder stage.
+#
+# ENV PATH="/opt/venv/bin:${PATH}"
+#
+# Prepends the venv’s bin/ directory so that python, any console scripts, and uv itself (since UV got installed into the venv) are all on PATH.
+#
+# COPY . /app
+#
+# Copies your entire project (including main.py, agent.py, tools/, utils/, etc.) into /app.
+#
+# RUN mkdir -p logs downloads results analysis heartbeat archive
+#
+# Creates the directories your scripts expect; even though each script does a .mkdir(exist_ok=True), this ensures they exist at build time to satisfy any startup‐check logic.
+#
+# CMD ["uv", "run", "main.py"]
+#
+# At container startup, calls uv run main.py. Because uv lives in /opt/venv/bin (and is on PATH), it will launch your agent under the correct Python environment.
+#
+# Building and Running
+# Build the image (run from your project root, where this Dockerfile lives):
+#
+# docker build -t my-agent-image .
+# Run the container, supplying any needed secrets and environment variables. For example:
+#
+# docker run -d \
+#   --name my-agent-container \
+#   -v ~/secrets/gmail_credentials.json:/app/token.json:ro \
+#   -e OPENAI_API_KEY="$OPENAI_API_KEY" \
+#   -e GMAIL_CREDENTIALS_PATH="/app/token.json" \
+#   my-agent-image
+# UV reads uv.lock to install dependencies; your Gmail OAuth JSON is mounted at /app/token.json, and the environment variable GMAIL_CREDENTIALS_PATH points to it.
+#
+# The container will execute uv run main.py, which in turn reads from constants.py, starts its heartbeat loop, and launches the agent.
+#
+# This Dockerfile follows Astral’s recommended UV‐with‐Docker approach:
+#
+# It uses the official UV image to build a dependency cache,
+#
+# Layers the “install dependencies” step separately,
+#
+# Copies only the final, pinned venv into a slim Python base,
+#
+# And runs your project via uv run.
+# """
