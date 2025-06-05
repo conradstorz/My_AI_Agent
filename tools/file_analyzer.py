@@ -297,6 +297,7 @@ def main():
                         ["python3", "utils/process_downloaded_data.py", "--input", str(file_path)],
                         check=True,
                     )
+                    # run_tool("utils.process_downloaded_data", "Process Downloaded Data", arguments=["--input", str(file_path)])
                     logger.info(f"Processor completed for '{filename}'.")
                 except Exception as e:
                     logger.error(f"Processor failed on '{filename}': {e}")
