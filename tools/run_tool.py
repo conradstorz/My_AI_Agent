@@ -6,11 +6,11 @@ import sys
 from loguru import logger
 
 
-def run_tool(module: str, label: str) -> bool:
+def run_tool(module: str, label: str, arguments=None) -> bool:
     logger.info(f"Invoking {label}...")
     try:
         result = subprocess.run(
-            [sys.executable, "-m", module],
+            [sys.executable, "-m", module, *arguments] if arguments else [sys.executable, "-m", module],
             check=True,
             capture_output=True,
             text=True
