@@ -43,6 +43,7 @@ from constants import (
     GMAIL_LOG_FILE,
     GMAIL_LOG_ROTATION,
     GMAIL_SCOPES,
+    FILENAME_FORMAT
 )
 # Load environment variables from a .env file, overriding existing environment values
 load_dotenv(override=True)
@@ -182,76 +183,83 @@ def hash_bytes(data):
 
 
 def download_attachments(service, history):
-    logger.info("Checking Gmail for messages with attachments…")
+    """
+    Check up to 10 messages with attachments per run. Once 10 messages have
+    been examined—even if some had no new attachments—we stop and return.
+    """
+    logger.info("Checking up to 10 Gmail messages with attachments…")
+
     page_token = None
     new_files = []
+    msgs_examined = 0
 
     while True:
         response = service.users().messages().list(
             userId="me",
-            q=GMAIL_ATTACHMENT_QUERY,
-            maxResults=MAX_PAGE_SIZE,
-            pageToken=page_token
+            q=GMAIL_ATTACHMENT_QUERY,       # "has:attachment"
+            pageToken=page_token,
+            maxResults=MAX_PAGE_SIZE       # you can keep this at 100 or lower
         ).execute()
         messages = response.get("messages", [])
-        logger.info(f"Found {len(messages)} message(s) on this page.")
+        logger.info(f"Retrieved {len(messages)} message metadata items from API.")
 
         for msg in messages:
+            # Stop if we've already looked at 10 messages
+            if msgs_examined >= 10:
+                logger.info("Reached 10 messages examined; stopping for this run.")
+                return new_files
+
             msg_id = msg["id"]
+            msgs_examined += 1
+
             if msg_id in history["message_ids"]:
                 logger.debug(f"Skipping already-processed message: {msg_id}")
                 continue
 
-            # Fetch the full message
+            # Fetch full message & headers
             message = service.users().messages().get(
                 userId="me", id=msg_id, format="full"
             ).execute()
 
-            # Extract headers
-            headers = message.get("payload", {}).get("headers", [])
-            subject = next((h["value"] for h in headers if h["name"] == "Subject"), "(no subject)")
-            sender  = next((h["value"] for h in headers if h["name"] == "From"), "(no sender)")
+            hdrs    = message.get("payload", {}).get("headers", [])
+            subject = next((h["value"] for h in hdrs if h["name"]=="Subject"), "(no subject)")
+            sender  = next((h["value"] for h in hdrs if h["name"]=="From"),    "(no sender)")
 
-            downloaded_this_msg = 0
+            # Process all parts looking for attachments
             for part in message.get("payload", {}).get("parts", []):
                 filename = part.get("filename")
                 body     = part.get("body", {})
                 if not filename or "attachmentId" not in body:
                     continue
 
-                attachment = service.users().messages().attachments().get(
-                    userId="me",
-                    messageId=msg_id,
+                raw = service.users().messages().attachments().get(
+                    userId="me", messageId=msg_id,
                     id=body["attachmentId"]
-                ).execute()
-                raw_data = base64.urlsafe_b64decode(attachment.get("data", ""))
-                file_hash = hash_bytes(raw_data)
+                ).execute().get("data", "")
+                data = base64.urlsafe_b64decode(raw)
+                file_hash = hash_bytes(data)
 
                 if file_hash in history["attachments"]:
-                    logger.debug(f"  Duplicate attachment (hash {file_hash}), skipping {filename}")
-                    continue
+                    logger.debug(f"  Duplicate (hash {file_hash}), skipping {filename}")
+                else:
+                    save_name = FILENAME_FORMAT.format(hash=file_hash, original_name=filename)
+                    path = DOWNLOAD_DIR / save_name
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_bytes(data)
+                    logger.info(f"  Saved attachment to: {path}")
 
-                # Save the new attachment
-                save_name = f"{file_hash}_{filename}"
-                save_path = DOWNLOAD_DIR / save_name
-                save_path.parent.mkdir(parents=True, exist_ok=True)
-                save_path.write_bytes(raw_data)
-                logger.info(f"  Attachment saved to: {save_path}")
+                    history["attachments"].add(file_hash)
+                    new_files.append({
+                        "filename":      save_name,
+                        "subject":       subject,
+                        "sender":        sender,
+                        "original_name": filename,
+                    })
 
-                history["attachments"].add(file_hash)
-                downloaded_this_msg += 1
-
-                new_files.append({
-                    "filename":      save_name,
-                    "subject":       subject,
-                    "sender":        sender,
-                    "original_name": filename,
-                })
-
-            # **Always** mark this message as seen, attachment or not
+            # Whether or not we downloaded something, mark this msg as seen
             history["message_ids"].add(msg_id)
 
-        # pagination?
+        # If there’s another page and we still haven’t examined 10 msgs, keep going
         page_token = response.get("nextPageToken")
         if not page_token:
             break

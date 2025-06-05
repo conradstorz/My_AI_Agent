@@ -79,20 +79,20 @@ def process_file(file_path: Path, key: str, print_tool: Path, archive_dir: Path,
     Update stats accordingly.
     """
     try:
-        logger.info("Printing {} for entry {}", file_path.name, key)
+        logger.info(f"Printing {file_path.name} for entry {key}")
         subprocess.run(["python", str(print_tool), str(file_path)], check=True)
         stats["files_printed"] += 1
 
         target = archive_dir / file_path.name
         file_path.rename(target)
         stats["archived"] += 1
-        logger.info("Archived {} → {}", file_path.name, target)
+        logger.info(f"Archived {file_path.name} → {target}")
     except subprocess.CalledProcessError as e:
         stats["errors"] += 1
-        logger.error("Print subprocess failed for {}: {}", file_path.name, e)
+        logger.error(f"Print subprocess failed for {file_path.name}: {e}")
     except Exception as e:
         stats["errors"] += 1
-        logger.exception("Unexpected error processing {}: {}", file_path.name, e)
+        logger.exception(f"Unexpected error processing {file_path.name}: {e}")
 
 
 def process_memory_entries(memory: dict, downloads_dir: Path, archive_dir: Path, print_tool: Path):
@@ -176,9 +176,12 @@ def main():
 
         # process each item in unhandled data
         for entry in unhandled_data:
-            file_path = entry.get("file_path")
-            if file_path:
-                file_path = paths["downloads_dir"] / file_path
+            filename = entry.get("filename")
+            # file_path = entry.get("file_path")
+            # if file_path:
+            if filename:
+                downloads_dir = paths["downloads_dir"]
+                file_path = downloads_dir / filename
                 if file_path.exists():
                     logger.info(f"Processing unhandled file: {file_path.name}")
                     # read the notes for this data item and see if there is processing we can do.

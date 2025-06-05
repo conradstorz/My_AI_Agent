@@ -1,0 +1,82 @@
+{
+  "SENDER::USPS Informed Delivery <USPSInformeddelivery@email.informeddelivery.usps.com>::.jpg": {
+    "source": "USPS Informed Delivery <USPSInformeddelivery@email.informeddelivery.usps.com>",
+    "filetype": ".jpg",
+    "summary": "[Binary file type: .jpg]",
+    "contains_structured_data": false,
+    "category": "(uncategorized)",
+    "notes": "Move the attachments to an archive folder named USPS Informed Delivery."
+  },
+  "SENDER::Mohammed Hilal Hussain <mohammedhilal.sr@zohocorp.com>::.png": {
+    "source": "Mohammed Hilal Hussain <mohammedhilal.sr@zohocorp.com>",
+    "filetype": ".png",
+    "summary": "[Binary file type: .png]",
+    "contains_structured_data": false,
+    "category": "(uncategorized)",
+    "notes": "This is an advertisement. archive it."
+  },
+  "SENDER::NEWFAX@faxtoyouremail.com::.pdf": {
+    "source": "NEWFAX@faxtoyouremail.com",
+    "filetype": ".pdf",
+    "summary": "The document contains a timestamp indicating a date and time.",
+    "contains_structured_data": false,
+    "category": "(uncategorized)",
+    "notes": ""
+  },
+  "SENDER::WTIWireless Accounting <accounting@wtiwireless.com>::.pdf": {
+    "source": "WTIWireless Accounting <accounting@wtiwireless.com>",
+    "filetype": ".pdf",
+    "summary": "The document is an invoice from WTIwireless for Storz Cash Services, detailing charges for various wireless IoT services for the period of May 1, 2025, to May 31, 2025. The total amount due is $49.89, with a due date of June 30, 2025. It includes customer service contact information, payment terms, and a breakdown of charges.",
+    "contains_structured_data": true,
+    "category": "(uncategorized)",
+    "notes": "This is a statement for wireless IoT services. Print it out and file it in the WTI Wireless folder."
+  },
+  "SENDER::Incredible Technologies <noreply@itsgames.com>::.xls": {
+    "source": "Incredible Technologies <noreply@itsgames.com>",
+    "filetype": ".xls",
+    "summary": "The document is a Player Loyalty Report for May 2025, but it contains no text or data to summarize further.",
+    "contains_structured_data": false,
+    "category": "(uncategorized)",
+    "notes": ""
+  },
+  "SENDER::KofC1348 <sperzel@kofc1348.org>::.png": {
+    "source": "KofC1348 <sperzel@kofc1348.org>",
+    "filetype": ".png",
+    "summary": "[Binary file type: .png]",
+    "contains_structured_data": false,
+    "category": "(uncategorized)",
+    "notes": ""
+  },
+  "SENDER::WTIWireless Accounting <accounting@wtiwireless.com>::.xlsx": {
+    "source": "WTIWireless Accounting <accounting@wtiwireless.com>",
+    "filetype": ".xlsx",
+    "summary": "The document is an Excel file named 'STORZCASH_SIM_Usage_05_2025' but contains no visible text or data.",
+    "contains_structured_data": false,
+    "category": "(uncategorized)",
+    "notes": ""
+  },
+  "SENDER::(unknown)::.pdf": {
+    "source": "(unknown)",
+    "filetype": ".pdf",
+    "summary": "The document appears to be an invoice, but it contains no text or details to summarize.",
+    "contains_structured_data": false,
+    "category": "(uncategorized)",
+    "notes": ""
+  },
+  "SENDER::(unknown)::.png": {
+    "source": "(unknown)",
+    "filetype": ".png",
+    "summary": "[Binary file type: .png]",
+    "contains_structured_data": false,
+    "category": "(uncategorized)",
+    "notes": ""
+  },
+  "SENDER::(unknown)::.jpg": {
+    "source": "(unknown)",
+    "filetype": ".jpg",
+    "summary": "[Binary file type: .jpg]",
+    "contains_structured_data": false,
+    "category": "(uncategorized)",
+    "notes": ""
+  }
+}

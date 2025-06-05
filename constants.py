@@ -12,6 +12,8 @@ All paths are built off ROOT_DIR (the directory containing this file).
 
 from pathlib import Path
 
+
+
 # Root directory for the project
 ROOT_DIR = Path(__file__).parent
 TOOLS_DIR = ROOT_DIR / "tools"
@@ -86,9 +88,11 @@ FILE_ANALYZER_ANALYSIS_DIR = ROOT_DIR / "analysis"
 FILE_ANALYZER_RESULTS_DIR = GMAIL_RESULTS_DIR
 # RESULTS_DIR already defined above
 FILE_ANALYZER_CONTEXT = GMAIL_RESULTS_FILE
-
+SENDER_MEMORY_PREFIX = "SENDER::"
+GMAIL_DOWNLOADER_RESULTS = GMAIL_RESULTS_FILE
 FILE_ANALYZER_MEMORY_FILE = ROOT_DIR / "categorization_memory.json"
 FILE_ANALYZER_UNHANDLED_FILE = ROOT_DIR / "unhandled_filedata.json"
+ANALYSIS_FILE_SUFFIX = ".analysis.json"
 
 # Logging settings for file_analyzer
 FILE_ANALYZER_LOG_FILE = LOGS_DIR / "file_analyzer.log"
@@ -103,8 +107,8 @@ PROCESS_DOWNLOADS_LOG_FILE = LOGS_DIR / "process_downloads.log"
 PROCESS_DOWNLOADS_LOG_ROTATION = "1 week"
 
 # Memory & data filenames (for process module)
-PROCESS_DOWNLOADS_MEMORY_FILE = TOOLS_DIR / "categorization_memory.json"
-PROCESS_DOWNLOADS_UNHANDLED_FILE = ROOT_DIR / "unhandled_filedata.json"
+PROCESS_DOWNLOADS_MEMORY_FILE = FILE_ANALYZER_MEMORY_FILE
+PROCESS_DOWNLOADS_UNHANDLED_FILE = FILE_ANALYZER_UNHANDLED_FILE
 PROCESS_DOWNLOADS_PRINT_TOOL_PATH = TOOLS_DIR / "print_tool.py"
 
 # Agent directories (flatten naming)
@@ -144,7 +148,7 @@ STARTUP_CHECKS_REQUIRED_MODULES = [
     'tools.file_analyzer',
 ]
 STARTUP_CHECKS_REQUIRED_DIRS = [
-    TOOLS_DIR / 'downloads',
+    TOOLS_DIR,
     TOOLS_DIR / 'analysis',
     TOOLS_DIR / 'results',
     LOGS_DIR,

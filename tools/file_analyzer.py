@@ -10,18 +10,25 @@ from loguru import logger
 from dotenv import load_dotenv
 import fitz  # PyMuPDF
 import pandas as pd
+import subprocess
 from utils.openai_tools import summarize_document
 from constants import (
     FILE_ANALYZER_DOWNLOADS_DIR,
+    GMAIL_DOWNLOADER_RESULTS,
     FILE_ANALYZER_ANALYSIS_DIR,
     FILE_ANALYZER_RESULTS_DIR,
     FILE_ANALYZER_CONTEXT,
     FILE_ANALYZER_MEMORY_FILE,
     FILE_ANALYZER_UNHANDLED_FILE,
+    ANALYSIS_FILE_SUFFIX,
     LOGS_DIR,
     FILE_ANALYZER_LOG_FILE,
     FILE_ANALYZER_LOG_ROTATION,
     FILE_ANALYZER_LOG_RETENTION,
+    FILE_ANALYZER_DOWNLOADS_DIR,
+    FILE_ANALYZER_MEMORY_FILE,
+    FILE_ANALYZER_UNHANDLED_FILE,
+    SENDER_MEMORY_PREFIX,    
 )
 
 # Global paths and state files
@@ -79,10 +86,10 @@ def save_json(data, path: Path):
 
 
 def load_context() -> dict:
-    """Load file metadata from gmail_downloader.json."""
+    """Load file metadata from GMAIL_DOWNLOADER_RESULTS."""
     path = FILE_ANALYZER_CONTEXT
     if not path.exists():
-        logger.warning("No gmail_downloader.json found.")
+        logger.warning(f"No {GMAIL_DOWNLOADER_RESULTS} found.")
         return {}
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
@@ -96,8 +103,8 @@ def load_context() -> dict:
 
 
 def load_messages() -> list:
-    """Load inline messages from gmail_downloader.json."""
-    path = FILE_ANALYZER_RESULTS_DIR / "gmail_downloader.json"
+    """Load inline messages from GMAIL_DOWNLOADER_RESULTS."""
+    path = FILE_ANALYZER_RESULTS_DIR / GMAIL_DOWNLOADER_RESULTS
     if not path.exists():
         logger.warning(f"No {path} found.")
         return []
@@ -111,7 +118,7 @@ def load_messages() -> list:
 
 def is_analyzed(stem: str) -> bool:
     """Check if an analysis file already exists for a stem."""
-    return (FILE_ANALYZER_ANALYSIS_DIR / f"{stem}.analysis.json").exists()
+    return (FILE_ANALYZER_ANALYSIS_DIR / f"{stem}{ANALYSIS_FILE_SUFFIX}").exists()
 
 
 def extract_pdf(file: Path) -> str:
@@ -178,7 +185,8 @@ def summarize_content(content: str, identifier: str) -> dict:
 
 def save_analysis(stem: str, analysis: dict):
     """Write analysis JSON to the analysis directory."""
-    path = FILE_ANALYZER_ANALYSIS_DIR / f"{stem}.analysis.json"
+    # path = FILE_ANALYZER_ANALYSIS_DIR / f"{stem}.analysis.json"
+    path = FILE_ANALYZER_ANALYSIS_DIR / f"{stem}{ANALYSIS_FILE_SUFFIX}"
     try:
         path.write_text(json.dumps(analysis, indent=2), encoding="utf-8")
         logger.info(f"Saved analysis: {path.name}")
@@ -265,6 +273,44 @@ def main():
     context = load_context()
 
     run()
+
+    # ─── Re‐visit unhandled entries to see if notes were filled in ───
+    remaining_unhandled = []
+    for entry in unhandled:
+        sender   = entry.get("sender", "(unknown)")
+        filetype = entry.get("filetype", "")
+        filename = entry.get("filename", "")
+        # Rebuild the memory key exactly as update_memory() did:
+        key = f"{SENDER_MEMORY_PREFIX}{sender}::{filetype}"
+        mem_entry = memory.get(key)
+
+        # If this sender+filetype now has non‐empty notes, process it:
+        if mem_entry and mem_entry.get("notes", "").strip():
+            # The user has populated “notes” since last run—invoke your processor.
+            file_path = FILE_ANALYZER_DOWNLOADS_DIR / filename
+            if file_path.exists():
+                logger.info(f"Reprocessing unhandled '{filename}' because notes were added.")
+                try:
+                    # You can call your existing processor script (e.g. process_downloaded_data.py).
+                    # Replace the next line with however you normally invoke your processor:
+                    subprocess.run(
+                        ["python3", "utils/process_downloaded_data.py", "--input", str(file_path)],
+                        check=True,
+                    )
+                    logger.info(f"Processor completed for '{filename}'.")
+                except Exception as e:
+                    logger.error(f"Processor failed on '{filename}': {e}")
+            else:
+                logger.warning(f"File not found (cannot reprocess): {filename}")
+            # Do NOT add this entry back to remaining_unhandled (it’s now handled)
+
+        else:
+            # Still no notes → keep in unhandled for next time
+            remaining_unhandled.append(entry)
+
+    # Overwrite unhandled with only those still missing notes:
+    unhandled = remaining_unhandled
+    # ────────────────────────────────────────────────────────────────────────────
 
     save_json(memory, FILE_ANALYZER_MEMORY_FILE)
     save_json(unhandled, FILE_ANALYZER_UNHANDLED_FILE)

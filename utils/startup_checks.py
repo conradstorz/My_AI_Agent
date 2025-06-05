@@ -41,7 +41,7 @@ def check_modules():
             logger.error(f"❌ Import failed: {module} — {e}")
 
 def check_directories():
-    for d in STARTUP_CHECKS_REQUIRED_DIRS:
+    for d in STARTUP_CHECKS_REQUIRED_DIRS: 
         if not d.exists():
             logger.warning(f"🟡 Missing directory: {d}")
         else:
