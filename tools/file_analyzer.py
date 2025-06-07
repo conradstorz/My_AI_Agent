@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 import fitz  # PyMuPDF
 import pandas as pd
 import subprocess
-from utils.openai_tools import summarize_document
+from utils.openai_tools import summarize_document, summarize_image
 from constants import (
     FILE_ANALYZER_DOWNLOADS_DIR,
     GMAIL_DOWNLOADER_RESULTS,
@@ -145,8 +145,7 @@ def extract_excel(file: Path) -> str:
 def ai_examine(file: Path) -> str:
     """Use AI to analyze image content."""
     try:
-        # Placeholder for actual AI examination logic
-        return f"[AI analysis of {file.name}]"
+        return summarize_image(file)
     except Exception as e:
         logger.error(f"AI examination error for {file.name}: {e}")
         return f"[Error analyzing image: {file.name}]"
@@ -185,7 +184,7 @@ def record_unhandled(file: Path, suffix: str):
 def summarize_content(content: str, identifier: str) -> dict:
     """Use AI to summarize content unless marked for skip."""
     if content.startswith("["):
-        return {"summary": content, "contains_structured_data": False, "notes": f"{identifier}: Skipped AI summarization."}
+        return {"summary": content, "contains_structured_data": False, "notes": f"Skipped AI summarization. {identifier}"}
     try:
         return summarize_document(content, identifier)
     except Exception as e:
