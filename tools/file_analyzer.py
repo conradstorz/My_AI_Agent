@@ -147,7 +147,7 @@ def ai_examine(file: Path) -> str:
     try:
         return summarize_image(file)
     except Exception as e:
-        logger.error(f"AI examination error for {file.name}: {e}")
+        logger.error(f"{e}: AI examination error for {file.name}")
         return f"[Error analyzing image: {file.name}]"
 
 def extract_content(file: Path) -> str:

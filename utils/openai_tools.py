@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import json
+import base64
 from loguru import logger
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -24,24 +25,29 @@ def summarize_image(image_path: Path) -> dict:
       - notes              (string)
     The assistant MUST output only valid JSON—nothing else.
     """
+    # Read and base64-encode the image
+    with open(image_path, "rb") as f:
+        b64 = base64.b64encode(f.read()).decode("utf-8")    
+
     system = {
         "role": "system",
         "content": SYSTEM_PROMPT_FOR_IMAGES
     }
+    
     user = {
+        "role": "system", "content": SYSTEM_PROMPT_FOR_IMAGES,
         "role": "user",
-        "content": (
-            f"Image filename: {image_path.name}\n\n"
-            "Please summarize the image and detect any structured data."
-        )
+        "content": [
+            {"type": "input_text", "text": "What do you see in this image?"},
+            {"type": "input_image", "image_url": f"data:image/png;base64,{b64}"}
+        ],
     }
 
-    resp = client.chat.completions.create(
-        model=OPENAI_MODEL,
-        messages=[system, user],
-        temperature=OPENAI_TEMPERATURE,
-        files=[{"file": image_path}]
+    resp = client.responses.create(
+        model="gpt-4o-mini",
+        input=user
     )
+
     raw = resp.choices[0].message.content.strip()
     # Optionally log raw for future debugging:
     logger.debug(f"[{image_path.name}] Raw JSON response:\n{raw}")
