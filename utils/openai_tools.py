@@ -43,16 +43,25 @@ def summarize_image(image_path: Path) -> dict:
         model="gpt-4o-mini",
         input=[message]
     )
+    # Optionally log raw for future debugging:
+    raw = resp.output_text.strip()
+    if not raw: # If the response is empty, log and raise an error
+        logger.error(f"Empty response from assistant for image: {image_path}")
+        raise ValueError(f"Empty response from assistant for image: {image_path}")              
+    # Log the raw response for debugging
+    Traw = resp.output_text.strip()
+    if len(Traw) > 1000:  # Limit logging to first 1000 characters for brevity
+        Traw = raw[:1000] + '... [truncated]'        
+    logger.debug(f"[{image_path.name}] Raw JSON response:\n{Traw}")
 
-    raw = resp.choices[0].message.content.strip()
-    logger.debug(f"[{image_path.name}] Raw JSON response:\n{raw}")
+    raw = resp.output_text.strip()
 
     # 4) Parse and return, with error handling
     try:
         return json.loads(raw)
     except json.JSONDecodeError:
         logger.error(f"Failed to decode JSON from assistant:\n{raw}")
-        raise
+        return "[ERROR] Failed to decode JSON from assistant. Please check the logs for details."
 
 
 
