@@ -268,6 +268,9 @@ def download_attachments(service, history):
     return new_files
 
 
+from datetime import datetime
+import json
+
 def write_result(downloaded_info):
     """
     Append this run's download summary to the results JSON file.
@@ -277,17 +280,35 @@ def write_result(downloaded_info):
     """
     # Ensure the results directory exists
     GMAIL_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    # Build result payload
+
+    # Build result payload with a human-readable timestamp
     result = {
-        "tool": "GmailDownloader",
+        "tool":            "GmailDownloader",
         "new_attachments": len(downloaded_info),
-        "downloads": downloaded_info,
-        "timestamp": time.time()
+        "downloads":       downloaded_info,
+        "timestamp":       datetime.utcnow().isoformat() + "Z"
     }
-    # Append JSON object to the results file for auditing
-    with GMAIL_RESULTS_FILE.open("a") as f:  # this does not work it corrupts the json file
-        json.dump(result, f, indent=2)
-    logger.info(f"Result JSON appended to: {GMAIL_RESULTS_FILE}")
+
+    # Load existing results (if any) into a list
+    runs = []
+    if GMAIL_RESULTS_FILE.exists():
+        try:
+            with GMAIL_RESULTS_FILE.open("r") as f:
+                data = json.load(f)
+            # If it was a single object, wrap it in a list
+            runs = data if isinstance(data, list) else [data]
+        except json.JSONDecodeError:
+            logger.warning(f"Results file corrupted or empty; starting fresh: {GMAIL_RESULTS_FILE}")
+
+    # Append the new run
+    runs.append(result)
+
+    # Write back the full array
+    with GMAIL_RESULTS_FILE.open("w") as f:
+        json.dump(runs, f, indent=2)
+
+    logger.info(f"Appended run result ({result['new_attachments']} attachments) to {GMAIL_RESULTS_FILE}")
+
 
 
 def main():
