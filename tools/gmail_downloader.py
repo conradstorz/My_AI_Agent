@@ -304,20 +304,29 @@ def main():
     # Ensure download folder exists before any downloads
     DOWNLOAD_DIR.mkdir(exist_ok=True)
 
-    # Authenticate and build the Gmail service client
+    logger.info("Authenticate and build the Gmail service client")
     try:
         service = authenticate()
     except FileNotFoundError as e:
         logger.error(f"Authentication failed: {e}")
         return  # Exit if credentials are missing
 
-    # Load or initialize history (now already in sets)
+    logger.info("Load or initialize history (now already in sets)")
+    # Load existing history or create a new one
     history = load_history()
 
+    logger.info("Starting attachment download process")
     try:
         downloaded_info = download_attachments(service, history)
+        logger.info(f"Downloaded {len(downloaded_info)} new attachments.")
         write_result(downloaded_info)
+        logger.info("Download process completed successfully.")
+    except Exception as e:
+        logger.error(f"An error occurred during the download process: {e}")
+        return  # Exit on any error 
     finally:
+        logger.info("Saving updated history of processed messages and attachments")
+        # Save the updated history back to disk
         save_history(history)
 
 if __name__ == "__main__":
