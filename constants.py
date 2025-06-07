@@ -150,15 +150,13 @@ and nothing else—no bullet points, no introductory text, no code fences. The J
 # ================================
 # startup_checks.py constants
 # ================================
-STARTUP_CHECKS_REQUIRED_MODULES = [
-    'utils.openai_tools',
-    'tools.gmail_downloader',
-    'tools.file_analyzer',
-]
+STARTUP_CHECKS_REQUIRED_MODULES = AGENT_MODULES
+
 STARTUP_CHECKS_REQUIRED_DIRS = [
     TOOLS_DIR,
-    TOOLS_DIR / 'analysis',
-    TOOLS_DIR / 'results',
+    FILE_ANALYZER_DOWNLOADS_DIR,
+    FILE_ANALYZER_ANALYSIS_DIR,
+    FILE_ANALYZER_RESULTS_DIR,
     LOGS_DIR,
 ]
 STARTUP_CHECKS_REQUIRED_ENV_VARS = [

@@ -20,40 +20,39 @@ def summarize_image(image_path: Path) -> dict:
     """
     Summarizes an image and detects structure. 
     Returns exactly one JSON object with keys:
-      - summary            (string)
+      - summary                  (string)
       - contains_structured_data (boolean)
-      - notes              (string)
+      - notes                    (string)
     The assistant MUST output only valid JSON—nothing else.
     """
-    # Read and base64-encode the image
+    # 1) Read and base64-encode the image
     with open(image_path, "rb") as f:
-        b64 = base64.b64encode(f.read()).decode("utf-8")    
+        b64 = base64.b64encode(f.read()).decode("utf-8")
 
-    system = {
-        "role": "system",
-        "content": SYSTEM_PROMPT_FOR_IMAGES
-    }
-    
-    user = {
-        "role": "system", "content": SYSTEM_PROMPT_FOR_IMAGES,
+    # 2) Build the multimodal user message
+    message = {
         "role": "user",
         "content": [
-            {"type": "input_text", "text": "What do you see in this image?"},
+            {"type": "input_text",  "text": SYSTEM_PROMPT_FOR_IMAGES},
             {"type": "input_image", "image_url": f"data:image/png;base64,{b64}"}
         ],
     }
 
+    # 3) Call the Responses API with a list of messages
     resp = client.responses.create(
         model="gpt-4o-mini",
-        input=user
+        input=[message]
     )
 
     raw = resp.choices[0].message.content.strip()
-    # Optionally log raw for future debugging:
     logger.debug(f"[{image_path.name}] Raw JSON response:\n{raw}")
 
-    # Parse and return
-    return json.loads(raw)
+    # 4) Parse and return, with error handling
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        logger.error(f"Failed to decode JSON from assistant:\n{raw}")
+        raise
 
 
 
