@@ -142,6 +142,14 @@ def extract_excel(file: Path) -> str:
         blocks.append(df.head(10).to_string(index=False))
     return "\n".join(blocks)
 
+def ai_examine(file: Path) -> str:
+    """Use AI to analyze image content."""
+    try:
+        # Placeholder for actual AI examination logic
+        return f"[AI analysis of {file.name}]"
+    except Exception as e:
+        logger.error(f"AI examination error for {file.name}: {e}")
+        return f"[Error analyzing image: {file.name}]"
 
 def extract_content(file: Path) -> str:
     """Extract text content or mark binary/unsupported types."""
@@ -152,7 +160,9 @@ def extract_content(file: Path) -> str:
         return extract_excel(file)
     if suffix in {".txt", ".html", ".csv", ".log"}:
         return file.read_text(encoding="utf-8", errors="ignore")
-    if suffix in {".jpg", ".jpeg", ".png", ".gif", ".zip", ".rar"}:
+    if suffix in {".jpg", ".jpeg", ".png", ".gif"}:
+        return ai_examine(file)
+    if suffix in {".zip", ".rar"}:
         logger.info(f"Skipping binary file: {file.name}")
         record_unhandled(file, suffix)
         return f"[Binary file type: {suffix}]"
@@ -175,7 +185,7 @@ def record_unhandled(file: Path, suffix: str):
 def summarize_content(content: str, identifier: str) -> dict:
     """Use AI to summarize content unless marked for skip."""
     if content.startswith("["):
-        return {"summary": content, "contains_structured_data": False, "notes": "Skipped AI summarization."}
+        return {"summary": content, "contains_structured_data": False, "notes": f"{identifier}: Skipped AI summarization."}
     try:
         return summarize_document(content, identifier)
     except Exception as e:

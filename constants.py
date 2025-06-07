@@ -131,8 +131,16 @@ PRINT_TOOL_LOG_ROTATION = '1 week'
 # ================================
 OPENAI_MODEL = 'gpt-4o-mini'
 OPENAI_TEMPERATURE = 0
-SYSTEM_PROMPT_CONTENT: str = """\
+SYSTEM_PROMPT_FOR_TEXT_CONTENT: str = """\
 You are a document-processing assistant. When given text, you will output exactly one JSON object
+and nothing else—no bullet points, no introductory text, no code fences. The JSON MUST have these three fields:
+  • summary (a concise prose summary)
+  • contains_structured_data (true or false)
+  • notes (any caveats or observations)
+"""  # Note that the first character is '\' to avoid the first line being blank in this multiline string.
+
+SYSTEM_PROMPT_FOR_IMAGES: str = """\
+You are an image-processing assistant. When given an image, you will output exactly one JSON object
 and nothing else—no bullet points, no introductory text, no code fences. The JSON MUST have these three fields:
   • summary (a concise prose summary)
   • contains_structured_data (true or false)

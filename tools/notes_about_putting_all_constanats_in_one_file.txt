@@ -485,7 +485,7 @@ The following in-file constants in **`openai_tools.py`** should be centralized:
 # openai_tools.py constants
 OPENAI_MODEL               = 'gpt-4o-mini'
 OPENAI_TEMPERATURE         = 0
-SYSTEM_PROMPT_CONTENT      = (
+SYSTEM_PROMPT_FOR_TEXT_CONTENT      = (
     "You are a document-processing assistant. "
     "When given text, you will output exactly one JSON object "
     "and nothing else—no bullet points, no introductory text, "
@@ -507,11 +507,11 @@ SYSTEM_PROMPT_CONTENT      = (
    from constants import (
        OPENAI_MODEL,
        OPENAI_TEMPERATURE,
-       SYSTEM_PROMPT_CONTENT,
+       SYSTEM_PROMPT_FOR_TEXT_CONTENT,
    )
    ```
 2. Replace hard-coded model name and temperature in `client.chat.completions.create`.
-3. Replace the system message content string with `SYSTEM_PROMPT_CONTENT`.
+3. Replace the system message content string with `SYSTEM_PROMPT_FOR_TEXT_CONTENT`.
 
 ## 11. Constants in `startup_checks.py`
 
