@@ -35,3 +35,11 @@ Thumbs.db
 downloads/
 downloaded_attachments.json
 tools/analysis/
+unhandled_filedata.json
+downloaded_attachments.json
+categorization_memory.json
+results/
+logs/
+analysis/
+
+
