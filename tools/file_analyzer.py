@@ -104,7 +104,7 @@ def load_context() -> dict:
 
 def load_messages() -> list:
     """Load inline messages from GMAIL_DOWNLOADER_RESULTS."""
-    path = FILE_ANALYZER_RESULTS_DIR / GMAIL_DOWNLOADER_RESULTS
+    path = FILE_ANALYZER_RESULTS_DIR / GMAIL_DOWNLOADER_RESULTS 
     if not path.exists():
         logger.warning(f"No {path} found.")
         return []
@@ -145,7 +145,21 @@ def extract_excel(file: Path) -> str:
 def ai_examine(file: Path) -> str:
     """Use AI to analyze image content."""
     try:
-        return summarize_image(file)
+        content_dict = summarize_image(file)
+        if isinstance(content_dict, str):
+            logger.error(f"AI examination returned string instead of JSON: {content_dict}")
+            return f"[Error analyzing image: {file.name}]"
+        if not isinstance(content_dict, dict):
+            logger.error(f"AI examination returned non-dict type: {type(content_dict)} for {file.name}")
+            return f"[Error analyzing image: {file.name}]"
+        summary = content_dict.get("summary", "")
+        contains_structured_data = content_dict.get("contains_structured_data", False)
+        notes = content_dict.get("notes", "")
+        if not summary:
+            logger.error(f"AI examination returned empty summary for {file.name}")
+            return f"[Error analyzing image: {file.name}]"
+        return summary
+    
     except Exception as e:
         logger.error(f"{e}: AI examination error for {file.name}")
         return f"[Error analyzing image: {file.name}]"
@@ -215,15 +229,27 @@ def process_file(file: Path):
     logger.info(f"Analyzing file: {file.name}")
     suffix = file.suffix.lower()
     meta = context.get(file.name, {})
+    logger.debug(f"Metadata for {file.name}: {meta}")
     subject = meta.get("subject", "(unknown)")
     sender = meta.get("sender", "(unknown)")
 
     content = extract_content(file)
+
+    logger.debug(f"Content length: {len(content)} characters")
+    logger.debug(f"Content type: {type(content)}")    
+    if not content:
+        logger.warning(f"No content extracted from {file.name}, skipping analysis.")
+        record_unhandled(file, suffix)
+        return
+
+    logger.debug(f"Extracted content from {file.name} ({suffix}): {content}...") 
+
     summary_data = summarize_content(content, file.name)
 
     analysis = {"filename": file.name, "timestamp": time.time(),
                 "filetype": suffix, "subject": subject, "sender": sender,
                 **summary_data}
+    
     save_analysis(file.stem, analysis)
 
     key = f"SENDER::{sender}::{suffix}"
@@ -260,6 +286,7 @@ def run():
         if is_analyzed(file.stem):
             logger.debug(f"Already analyzed: {file.name}")
             continue
+        logger.info(f"Processing file: {file.name}")
         process_file(file)
 
     for message in load_messages():
