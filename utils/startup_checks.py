@@ -14,6 +14,11 @@ from constants import (
 )
 import time
 
+from utils.env_setup import setup_environment
+# Ensure the environment is set up before running diagnostics
+# This ensures that the environment variables and directories are ready before running diagnostics
+setup_environment()
+
 REQUIRED_MODULES = [
     "utils.openai_tools",
     "tools.gmail_downloader",
