@@ -86,20 +86,48 @@ def save_json(data, path: Path):
 
 
 def load_context() -> dict:
-    """Load file metadata from GMAIL_DOWNLOADER_RESULTS."""
+    """
+    Load file metadata from GMAIL_DOWNLOADER_RESULTS and return a mapping:
+      filename → {"subject": ..., "sender": ...}
+    Works whether your JSON is:
+      - a dict keyed by timestamps: { "2025-06-07T12:00Z": { "downloads":[…] }, … }
+      - or a list of run-objects: [ { "downloads":[…] }, … ]
+    """
     path = FILE_ANALYZER_CONTEXT
     if not path.exists():
-        logger.warning(f"No {GMAIL_DOWNLOADER_RESULTS} found.")
+        logger.warning(f"No {GMAIL_DOWNLOADER_RESULTS} found at {path}")
         return {}
+
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
-        return {
-            item["filename"]: {"subject": item.get("subject", "(unknown)"), "sender": item.get("sender", "(unknown)")}
-            for item in raw.get("downloads", [])
-        }
     except Exception as e:
-        logger.error(f"Failed to load context: {e}")
+        logger.error(f"Failed to load context file {path}: {e}")
         return {}
+
+    # Gather every run’s downloads list
+    runs = []
+    if isinstance(raw, dict):
+        for run in raw.values():
+            if isinstance(run, dict) and "downloads" in run:
+                runs.extend(run["downloads"])
+    elif isinstance(raw, list):
+        for run in raw:
+            if isinstance(run, dict) and "downloads" in run:
+                runs.extend(run["downloads"])
+
+    # Build the filename → metadata map
+    context_map = {}
+    for item in runs:
+        fn = item.get("filename")
+        if not fn:
+            continue
+        context_map[fn] = {
+            "subject": item.get("subject", "(unknown)"),
+            "sender":  item.get("sender", "(unknown)")
+        }
+
+    return context_map
+
 
 
 def load_messages() -> list:
