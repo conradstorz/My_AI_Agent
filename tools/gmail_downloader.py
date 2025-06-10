@@ -24,7 +24,7 @@ import hashlib              # For computing SHA-256 hashes
 import json                 # JSON serialization/deserialization
 import os                   # Environment variable access
 import pickle               # Token storage format
-import time                 # Timestamping results
+from datetime import datetime
 from dotenv import load_dotenv  # Load .env files
 from google.auth.transport.requests import Request  # Refresh OAuth tokens
 from google_auth_oauthlib.flow import InstalledAppFlow  # OAuth2 flow
@@ -268,12 +268,9 @@ def download_attachments(service, history):
     return new_files
 
 
-from datetime import datetime
-import json
-
 def write_result(downloaded_info):
     """
-    Append this run's download summary to the results JSON file.
+    Append this run's download summary to the results JSON file, keyed by runtime.
 
     :param downloaded_info: List of metadata dicts for downloaded attachments.
     :type downloaded_info: list
@@ -281,34 +278,45 @@ def write_result(downloaded_info):
     # Ensure the results directory exists
     GMAIL_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Build result payload with a human-readable timestamp
-    result = {
+    # Use an ISO-8601 UTC timestamp as the key
+    timestamp = datetime.utcnow().isoformat() + "Z"
+
+    # Prepare the payload for this run (we omit the timestamp since it's the key)
+    result_data = {
         "tool":            "GmailDownloader",
         "new_attachments": len(downloaded_info),
         "downloads":       downloaded_info,
-        "timestamp":       datetime.utcnow().isoformat() + "Z"
     }
 
-    # Load existing results (if any) into a list
-    runs = []
+    # Load existing runs into a dict (or start fresh)
+    runs = {}
     if GMAIL_RESULTS_FILE.exists():
         try:
             with GMAIL_RESULTS_FILE.open("r") as f:
                 data = json.load(f)
-            # If it was a single object, wrap it in a list
-            runs = data if isinstance(data, list) else [data]
+            if isinstance(data, dict):
+                runs = data
+            else:
+                logger.warning(
+                    f"Expected JSON object at top level but got {type(data).__name__}; "
+                    f"overwriting {GMAIL_RESULTS_FILE}"
+                )
         except json.JSONDecodeError:
-            logger.warning(f"Results file corrupted or empty; starting fresh: {GMAIL_RESULTS_FILE}")
+            logger.warning(
+                f"Could not decode existing results file; starting new one: {GMAIL_RESULTS_FILE}"
+            )
 
-    # Append the new run
-    runs.append(result)
+    # Key this run by its timestamp
+    runs[timestamp] = result_data
 
-    # Write back the full array
+    # Write the entire dict back out
     with GMAIL_RESULTS_FILE.open("w") as f:
         json.dump(runs, f, indent=2)
 
-    logger.info(f"Appended run result ({result['new_attachments']} attachments) to {GMAIL_RESULTS_FILE}")
-
+    logger.info(
+        f"Appended run result for {timestamp} ({result_data['new_attachments']} attachments) "
+        f"to {GMAIL_RESULTS_FILE}"
+    )
 
 
 def main():
